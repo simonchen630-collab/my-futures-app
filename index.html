@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>期貨手動沖銷成本計算器</title>
+  <title>期貨手動沖銷與對鎖成本計算器</title>
   
   <!-- 載入 Tailwind CSS CDN 用於現代化美觀介面 -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -29,16 +29,14 @@
   <!-- 手機全螢幕 APP 模式設定 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="期貨沖銷">
+  <meta name="apple-mobile-web-app-title" content="期貨對鎖沖銷">
   
   <style>
-    /* 移除 iOS 彈性捲動導致的白底問題，確保純黑質感 */
     body {
       background-color: #020617;
       user-select: none;
       -webkit-user-select: none;
     }
-    /* 捲動軸美化 */
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -66,36 +64,32 @@
         </div>
         <div class="min-w-0">
           <h1 class="text-xs sm:text-sm font-bold tracking-wide text-slate-100 flex items-center gap-1 truncate">
-            期貨手動沖銷
-            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0">方案A優化版</span>
+            期貨對鎖與沖銷計算器
+            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0">方案A對鎖版</span>
           </h1>
-          <p class="text-[9px] text-slate-400 truncate">手動對沖記帳 · 快速存取免失聯</p>
+          <p class="text-[9px] text-slate-400 truncate">支援跨月價差折算 · 離線自主對沖</p>
         </div>
       </div>
       
-      <!-- 方案A 頂部快捷按鈕 -->
+      <!-- 右上角備份/還原/系統工具 -->
       <div class="flex items-center gap-1.5 shrink-0">
-        <!-- 快速備份 -->
         <button
           onclick="exportData()"
-          class="px-2 py-1.5 bg-indigo-650 hover:bg-indigo-600 active:bg-indigo-700 text-[10px] sm:text-xs font-extrabold rounded-lg transition flex items-center gap-1 text-white shadow-md shadow-indigo-950/50"
-          title="將當前所有持倉與平倉資料導出為 JSON 檔案儲存到手機"
+          class="px-2 py-1.5 bg-indigo-650 hover:bg-indigo-600 active:bg-indigo-700 text-[10px] sm:text-xs font-extrabold rounded-lg transition flex items-center gap-1 text-white shadow-md"
+          title="將當前所有持倉與對鎖資料導出成 JSON 備份檔"
         >
           <i class="fa-solid fa-file-export"></i><span>備份</span>
         </button>
-        <!-- 快速還原 -->
         <label
           class="px-2 py-1.5 bg-slate-800 hover:bg-slate-750 active:bg-slate-800 text-[10px] sm:text-xs font-extrabold rounded-lg transition border border-slate-700 text-slate-200 cursor-pointer flex items-center gap-1"
-          title="選擇之前備份的 JSON 檔案，一鍵還原所有記帳"
+          title="選擇 JSON 備份檔，還原所有帳務記錄"
         >
           <i class="fa-solid fa-file-import"></i><span>還原</span>
           <input type="file" accept=".json" onchange="importData(event)" class="hidden">
         </label>
-        <!-- 更多工具下拉開關 -->
         <button
           onclick="toggleTools()"
           class="p-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center border border-slate-800 bg-slate-950 hover:bg-slate-900 text-slate-400"
-          title="更多系統選項 (載入示範、安全清空)"
         >
           <i class="fa-solid fa-ellipsis-vertical"></i>
         </button>
@@ -103,20 +97,40 @@
     </div>
   </header>
 
+  <!-- 雙系統主分頁選單 -->
+  <div class="bg-slate-900 border-b border-slate-800 sticky top-[57px] z-30">
+    <div class="max-w-7xl mx-auto flex">
+      <button
+        onclick="switchMainTab('LIFO')"
+        id="main-tab-lifo"
+        class="flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-indigo-500 text-white flex items-center justify-center gap-1.5 transition"
+      >
+        <i class="fa-solid fa-list-check text-indigo-400"></i> LIFO / 指定平倉
+      </button>
+      <button
+        onclick="switchMainTab('LOCK')"
+        id="main-tab-lock"
+        class="flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition"
+      >
+        <i class="fa-solid fa-lock text-amber-400"></i> 價差對鎖區間計算
+      </button>
+    </div>
+  </div>
+
   <!-- 儲存權限警報區（偵測沙盒） -->
   <div id="storage-alert" class="hidden bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-[10px] text-amber-200/90">
     <div class="max-w-7xl mx-auto flex items-center gap-2">
       <i class="fa-solid fa-circle-info text-amber-400"></i>
       <p>
-        <strong>溫馨提示：</strong> 偵測到您目前正使用 Gemini 視窗預覽。記完帳後請隨手點選右上角「<strong>備份</strong>」下載存檔，下次開啟再按「<strong>還原</strong>」即可繼續記帳！
+        <strong>溫馨提示：</strong> 目前正使用 Gemini 內嵌預覽。記帳後請點選右上角「<strong>備份</strong>」下載存檔，下次開啟按「<strong>還原</strong>」即可繼續！
       </p>
     </div>
   </div>
 
-  <!-- 可隱藏的系統工具箱 -->
-  <div id="tools-panel" class="hidden bg-slate-900/95 border-b border-slate-800 p-3 transition-all">
+  <!-- 隱藏工具箱 -->
+  <div id="tools-panel" class="hidden bg-slate-900/95 border-b border-slate-800 p-3">
     <div class="max-w-7xl mx-auto flex gap-2 justify-end items-center text-xs">
-      <span class="text-slate-500 mr-auto text-[10px]">進階輔助功能：</span>
+      <span class="text-slate-500 mr-auto text-[10px]">系統操作：</span>
       <button
         onclick="loadDemoData()"
         class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold rounded-lg transition border border-slate-700 text-indigo-300"
@@ -132,352 +146,436 @@
     </div>
   </div>
 
-  <!-- 主要內容區 -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 space-y-4">
-    
-    <!-- 頂部四大看板 -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+  <!-- ==========================================
+      TAB 1: LIFO / 指定平倉主畫面
+      ========================================== -->
+  <div id="panel-lifo" class="flex-1">
+    <main class="max-w-7xl w-full mx-auto p-3 sm:p-5 space-y-4">
       
-      <!-- 目前持倉狀況與平均成本 -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between col-span-2 sm:col-span-1">
-        <div>
-          <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-1.5">📦 目前持倉均價</span>
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between items-center">
-              <span class="text-emerald-400 font-bold">多單持倉:</span>
-              <span id="long-summary" class="text-slate-200 font-mono font-bold">無部位</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-rose-400 font-bold">空單持倉:</span>
-              <span id="short-summary" class="text-slate-200 font-mono font-bold">無部位</span>
+      <!-- 四大看板 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <!-- 目前持倉均價 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between col-span-2 sm:col-span-1">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-1.5">📦 目前持倉均價</span>
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between items-center">
+                <span class="text-emerald-400 font-bold">多單持倉:</span>
+                <span id="long-summary" class="text-slate-200 font-mono font-bold">無部位</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-rose-400 font-bold">空單持倉:</span>
+                <span id="short-summary" class="text-slate-200 font-mono font-bold">無部位</span>
+              </div>
             </div>
           </div>
+          <div id="contract-spec" class="text-[9px] text-slate-500 border-t border-slate-800/80 pt-1.5 mt-1.5 font-medium">
+            合約規格：小台指期貨 (MXF)
+          </div>
         </div>
-        <div id="contract-spec" class="text-[9px] text-slate-500 border-t border-slate-800/80 pt-1.5 mt-1.5 font-medium">
-          合約規格：小台指期貨 (MXF)
+
+        <!-- 實際價格 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between">
+          <div>
+            <span class="text-[10px] font-semibold text-amber-400 block uppercase tracking-wider mb-1.5">⚡ 目前市場實際價格</span>
+            <div class="flex items-center gap-1.5">
+              <input
+                type="number"
+                id="market-price-input"
+                oninput="updateMarketPrice(this.value)"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-base font-bold font-mono text-slate-100 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                value="20050"
+              >
+              <span class="text-xs text-slate-400 font-bold">點</span>
+            </div>
+          </div>
+          <p class="text-[8px] text-slate-500 mt-1">動態即時計算未平倉浮動損益</p>
+        </div>
+
+        <!-- 損益指標 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg grid grid-cols-2 gap-1.5">
+          <div class="border-r border-slate-800 pr-1">
+            <span class="text-[9px] font-semibold text-slate-400 block">未平倉損益</span>
+            <span id="unrealized-pnl" class="text-xs sm:text-sm font-extrabold font-mono block truncate text-slate-200">
+              0元
+            </span>
+            <span class="text-[8px] text-slate-500 block mt-1">浮動估計</span>
+          </div>
+          <div class="pl-1">
+            <span class="text-[9px] font-semibold text-slate-400 block">已平倉損益</span>
+            <span id="realized-pnl" class="text-xs sm:text-sm font-extrabold font-mono block truncate text-slate-200">
+              0元
+            </span>
+            <span class="text-[8px] text-slate-500 block mt-1">手動平倉已結</span>
+          </div>
+        </div>
+
+        <!-- 總合併損益 -->
+        <div id="total-pnl-card" class="rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between border bg-slate-900 border-slate-800">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-0.5">⚖️ 總合併淨損益</span>
+            <div id="total-pnl" class="text-base sm:text-lg font-extrabold font-mono tracking-tight text-slate-100">
+              0 元
+            </div>
+          </div>
+          <div class="text-[8px] text-slate-400">
+            算式：未平倉損益 + 已平倉損益
+          </div>
         </div>
       </div>
 
-      <!-- 目前實際價格手動輸入 -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between">
+      <!-- 主要交互工作區 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        <!-- 左側：輸入表單 -->
+        <div class="lg:col-span-5 space-y-4">
+          <!-- 選擇合約 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <span class="text-xs font-semibold text-slate-400 block mb-2">1. 選擇記帳合約規格</span>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="selectContract('TX')" id="btn-contract-TX" class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-slate-800 border-slate-700 text-slate-300">大台 (TX/200)</button>
+              <button onclick="selectContract('MXF')" id="btn-contract-MXF" class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-indigo-600 border-indigo-500 text-white shadow-md">小台 (MXF/50)</button>
+              <button onclick="selectContract('TMF')" id="btn-contract-TMF" class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-slate-800 border-slate-700 text-slate-300">微台 (TMF/10)</button>
+            </div>
+          </div>
+
+          <!-- 建倉/平倉輸入區 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <div class="flex border-b border-slate-800 pb-2.5 mb-3 gap-2">
+              <button type="button" onclick="switchFormAction('OPEN')" id="tab-open" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600/10 border border-emerald-500/50 text-emerald-400">🟢 新增建倉部位</button>
+              <button type="button" onclick="switchFormAction('CLOSE')" id="tab-close" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-950 text-slate-400 border border-transparent">🔴 進行手動平倉</button>
+            </div>
+
+            <!-- 建倉 -->
+            <form id="form-open" onsubmit="addOpenLot(event)" class="space-y-3">
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-0.5">交易時間：</label>
+                <input type="text" id="open-date" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none">
+              </div>
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-1">建倉方向：</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="selectOpenDirection('LONG')" id="btn-open-long" class="py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white">多單 (Buy)</button>
+                  <button type="button" onclick="selectOpenDirection('SHORT')" id="btn-open-short" class="py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850">空單 (Sell)</button>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">建倉價 (點)：</label>
+                  <input type="number" step="any" id="open-price" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" placeholder="例如: 20000" required>
+                </div>
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">建倉數量 (口)：</label>
+                  <input type="number" id="open-qty" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" value="1" required>
+                </div>
+              </div>
+              <button type="submit" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded-lg transition text-white">確認新增建倉</button>
+            </form>
+
+            <!-- 平倉 -->
+            <form id="form-close" onsubmit="closeLot(event)" class="space-y-3 hidden">
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-0.5">平倉時間：</label>
+                <input type="text" id="close-date" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none">
+              </div>
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-0.5">🎯 選擇要沖銷的單：</label>
+                <select id="close-lot-selector" onchange="onSelectLotToClose(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200" required>
+                  <option value="">-- 請指定一筆持倉進行平倉 --</option>
+                </select>
+                <span id="close-lot-error" class="hidden text-[9px] text-rose-400 mt-1 block">目前無任何未平倉部位。</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">平倉價格 (點)：</label>
+                  <input type="number" step="any" id="close-price" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" required>
+                </div>
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">平倉數量 (口)：</label>
+                  <input type="number" id="close-qty" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" value="1" required>
+                </div>
+              </div>
+              <button type="submit" id="btn-close-submit" class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold rounded-lg transition text-white">確認指定平倉</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 右側：明細列表 -->
+        <div class="lg:col-span-7 space-y-4">
+          <!-- 未平倉明細 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <div class="flex justify-between items-center mb-3">
+              <div>
+                <h3 class="text-xs sm:text-sm font-bold text-indigo-400">📦 未平倉部位 (持倉)</h3>
+                <p class="text-[10px] text-slate-400">點擊 ⚡ 按鈕快速進入該單平倉模式</p>
+              </div>
+              <span id="open-lots-badge" class="text-[10px] bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded-full font-bold">共 0 筆</span>
+            </div>
+            <div id="open-lots-container" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+          </div>
+
+          <!-- 已平倉明細 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <div class="flex justify-between items-center mb-3">
+              <div>
+                <h3 class="text-xs sm:text-sm font-bold text-rose-400">🧾 歷史已平倉記錄</h3>
+                <p class="text-[10px] text-slate-400">已結算清單，刪除會自動還原部位</p>
+              </div>
+              <span id="closed-records-badge" class="text-[10px] bg-rose-900/40 text-rose-300 px-2 py-0.5 rounded-full font-bold">共 0 筆</span>
+            </div>
+            <div id="closed-records-container" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+
+  <!-- ==========================================
+      TAB 2: 價差對鎖區間計算主畫面 (NEW FEATURE)
+      ========================================== -->
+  <div id="panel-lock" class="flex-1 hidden">
+    <main class="max-w-7xl w-full mx-auto p-3 sm:p-5 space-y-4">
+      
+      <!-- 頂部設定面板 (對鎖特定設定) -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
         <div>
-          <span class="text-[10px] font-semibold text-amber-400 block uppercase tracking-wider mb-1.5">⚡ 目前市場實際價格</span>
+          <label class="text-[10px] font-bold text-amber-400 block mb-1">📐 次月價差 (次月價 - 當月等效)</label>
           <div class="flex items-center gap-1.5">
             <input
               type="number"
-              id="market-price-input"
-              oninput="updateMarketPrice(this.value)"
-              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-base font-bold font-mono text-slate-100 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-              value="20050"
+              id="lock-spread-input"
+              oninput="updateLockingSpread(this.value)"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-sm font-bold font-mono text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              value="200"
             >
             <span class="text-xs text-slate-400 font-bold">點</span>
           </div>
         </div>
-        <p class="text-[8px] text-slate-500 mt-1">動態即時計算未平倉浮動損益</p>
-      </div>
-
-      <!-- 損益指標 (未平倉、已平倉) -->
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg grid grid-cols-2 gap-1.5">
-        <div class="border-r border-slate-800 pr-1">
-          <span class="text-[9px] font-semibold text-slate-400 block">未平倉損益</span>
-          <span id="unrealized-pnl" class="text-xs sm:text-sm font-extrabold font-mono block truncate text-slate-200">
-            0元
-          </span>
-          <span class="text-[8px] text-slate-500 block mt-1">浮動估計</span>
-        </div>
-        <div class="pl-1">
-          <span class="text-[9px] font-semibold text-slate-400 block">已平倉損益</span>
-          <span id="realized-pnl" class="text-xs sm:text-sm font-extrabold font-mono block truncate text-slate-200">
-            0元
-          </span>
-          <span class="text-[8px] text-slate-500 block mt-1">手動平倉已結</span>
-        </div>
-      </div>
-
-      <!-- 總合併損益 -->
-      <div id="total-pnl-card" class="rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between border bg-slate-900 border-slate-800">
         <div>
-          <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-0.5">⚖️ 總合併淨損益</span>
-          <div id="total-pnl" class="text-base sm:text-lg font-extrabold font-mono tracking-tight text-slate-100">
-            0 元
+          <label class="text-[10px] font-bold text-indigo-400 block mb-1">⚡ 目前指數價格</label>
+          <div class="flex items-center gap-1.5">
+            <input
+              type="number"
+              id="lock-index-input"
+              oninput="updateLockingIndex(this.value)"
+              class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-sm font-bold font-mono text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              value="46500"
+            >
+            <span class="text-xs text-slate-400 font-bold">點</span>
           </div>
         </div>
-        <div class="text-[8px] text-slate-400">
-          算式：未平倉損益 + 已平倉損益
+
+        <!-- 對鎖區間顯示 (Requirement 3) -->
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col justify-center">
+          <span class="text-[9px] text-slate-400 font-semibold block">🔒 鎖定區間範圍</span>
+          <span id="locking-range-display" class="text-xs sm:text-sm font-extrabold text-amber-400 font-mono mt-0.5">
+            無對鎖部位
+          </span>
+        </div>
+
+        <!-- 契約乘數提示 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col justify-center text-xs">
+          <span class="text-[9px] text-slate-400 font-semibold block">📊 計算合約 (同分頁1)</span>
+          <span id="lock-contract-spec" class="text-xs font-bold text-slate-300 font-mono mt-0.5">
+            大台 (TX/200元)
+          </span>
         </div>
       </div>
 
-    </div>
-
-    <!-- 主要交互工作區 -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      
-      <!-- 左側：輸入表單 -->
-      <div class="lg:col-span-5 space-y-4">
-        
-        <!-- 1. 選擇合約 -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
-          <span class="text-xs font-semibold text-slate-400 block mb-2">1. 選擇記帳合約規格</span>
-          <div class="grid grid-cols-3 gap-2">
-            <button
-              onclick="selectContract('TX')"
-              id="btn-contract-TX"
-              class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-slate-800 border-slate-700 text-slate-300"
-            >
-              大台 (TX/200)
-            </button>
-            <button
-              onclick="selectContract('MXF')"
-              id="btn-contract-MXF"
-              class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-indigo-600 border-indigo-500 text-white shadow-md"
-            >
-              小台 (MXF/50)
-            </button>
-            <button
-              onclick="selectContract('TMF')"
-              id="btn-contract-TMF"
-              class="py-1.5 px-2 rounded-lg text-xs font-bold border transition bg-slate-800 border-slate-700 text-slate-300"
-            >
-              微台 (TMF/10)
-            </button>
+      <!-- 對鎖三大損益看板 + 持倉均價看板 (Requirement 3) -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <!-- 多空持倉統計與平均成本 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-col justify-between">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-1">📦 目前持倉均價 (折算後)</span>
+            <div class="space-y-1 text-xs">
+              <div class="flex justify-between items-center">
+                <span class="text-emerald-400 font-bold">多單均價:</span>
+                <span id="lock-long-summary" class="text-slate-200 font-mono font-bold">無部位</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-rose-400 font-bold">空單均價:</span>
+                <span id="lock-short-summary" class="text-slate-200 font-mono font-bold">無部位</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- 2. 建倉或平倉表單 -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
-          <!-- 頁籤切換 -->
-          <div class="flex border-b border-slate-800 pb-2.5 mb-3 gap-2">
-            <button
-              type="button"
-              onclick="switchFormAction('OPEN')"
-              id="tab-open"
-              class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600/10 border border-emerald-500/50 text-emerald-400"
-            >
-              🟢 新增建倉部位
-            </button>
-            <button
-              type="button"
-              onclick="switchFormAction('CLOSE')"
-              id="tab-close"
-              class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-950 text-slate-400 border border-transparent"
-            >
-              🔴 進行手動平倉
-            </button>
+        <!-- 未平倉損益 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-col justify-between">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block mb-1">未平倉 (浮動) 損益</span>
+            <span id="lock-unrealized-display" class="text-base font-extrabold font-mono text-slate-200">
+              0 元
+            </span>
           </div>
+        </div>
 
-          <!-- A. 建倉表單 -->
-          <form id="form-open" onsubmit="addOpenLot(event)" class="space-y-3">
-            <div>
-              <label class="text-[11px] text-slate-400 block mb-0.5">交易時間：</label>
-              <input
-                type="text"
-                id="open-date"
-                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-              >
+        <!-- 已平倉損益 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-col justify-between">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block mb-1">已平倉 (實現) 損益</span>
+            <span id="lock-realized-display" class="text-base font-extrabold font-mono text-slate-200">
+              0 元
+            </span>
+          </div>
+        </div>
+
+        <!-- 總合併損益 -->
+        <div id="lock-total-card" class="rounded-xl p-3 shadow-lg flex flex-col justify-between border bg-slate-900 border-slate-800">
+          <div>
+            <span class="text-[10px] font-semibold text-slate-400 block uppercase tracking-wider mb-1">⚖️ 對鎖合併總損益</span>
+            <div id="lock-total-display" class="text-base sm:text-lg font-extrabold font-mono text-slate-100">
+              0 元
             </div>
+          </div>
+        </div>
+      </div>
 
-            <div>
-              <label class="text-[11px] text-slate-400 block mb-1">建倉方向：</label>
+      <!-- 下方交互工作區 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        
+        <!-- 左側：輸入表單 -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md space-y-3">
+            <span class="text-xs font-semibold text-slate-400 block border-b border-slate-800 pb-2">➕ 新增對鎖/一般交易</span>
+            
+            <form onsubmit="addLockingLot(event)" class="space-y-3">
+              <!-- 交易時間 -->
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-0.5">時間：</label>
+                <input type="text" id="lock-form-date" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none">
+              </div>
+
+              <!-- 欄位1：一般單 / 對鎖單下拉選項 (Requirement 2) -->
               <div class="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onclick="selectOpenDirection('LONG')"
-                  id="btn-open-long"
-                  class="py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white shadow-md"
-                >
-                  多單 (Buy)
-                </button>
-                <button
-                  type="button"
-                  onclick="selectOpenDirection('SHORT')"
-                  id="btn-open-short"
-                  class="py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850"
-                >
-                  空單 (Sell)
-                </button>
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">單子類型：</label>
+                  <select
+                    id="lock-form-type"
+                    onchange="onLockFormTypeChange(this.value)"
+                    class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+                    required
+                  >
+                    <option value="NORMAL">一般單 (當月)</option>
+                    <option value="LOCK">對鎖單 (次月折算)</option>
+                  </select>
+                </div>
+                <!-- 欄位2：新建倉 / 平倉下拉選項 (Requirement 2) -->
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">操作類型：</label>
+                  <select
+                    id="lock-form-action"
+                    onchange="onLockFormActionChange(this.value)"
+                    class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+                    required
+                  >
+                    <option value="OPEN">新建倉 (開新部位)</option>
+                    <option value="CLOSE">平倉 (手動沖銷)</option>
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <div class="grid grid-cols-2 gap-2">
+              <!-- 平倉對象選擇（僅平倉時出現） -->
+              <div id="lock-target-lot-group" class="hidden">
+                <label class="text-[11px] text-slate-400 block mb-0.5">🎯 選擇要沖銷的持倉：</label>
+                <select id="lock-close-selector" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none">
+                  <!-- 動態生成 -->
+                </select>
+              </div>
+
+              <!-- 欄位3：多單 / 空單方向按鈕 (Requirement 2) -->
               <div>
-                <label class="text-[11px] text-slate-400 block mb-0.5">建倉成交價 (點)：</label>
-                <input
-                  type="number"
-                  step="any"
-                  id="open-price"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-200"
-                  placeholder="例如: 20000"
-                  required
-                >
+                <label class="text-[11px] text-slate-400 block mb-1">方向：</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="selectLockDirection('LONG')" id="btn-lock-long" class="py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white">多單 (Long)</button>
+                  <button type="button" onclick="selectLockDirection('SHORT')" id="btn-lock-short" class="py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850">空單 (Short)</button>
+                </div>
               </div>
-              <div>
-                <label class="text-[11px] text-slate-400 block mb-0.5">建倉數量 (口)：</label>
-                <input
-                  type="number"
-                  id="open-qty"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-200"
-                  value="1"
-                  required
-                >
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label id="lbl-lock-price" class="text-[11px] text-slate-400 block mb-0.5">成交價/平倉價 (點)：</label>
+                  <input type="number" step="any" id="lock-form-price" oninput="calculateAdjustedPriceDisplay()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" placeholder="例如: 46000" required>
+                  <span id="adjusted-price-helper" class="text-[9px] text-indigo-400 mt-1 block h-4"></span>
+                </div>
+                <div>
+                  <label class="text-[11px] text-slate-400 block mb-0.5">成交口數 (口)：</label>
+                  <input type="number" id="lock-form-qty" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" value="1" required>
+                </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded-lg transition text-white shadow-md"
-            >
-              確認新增建倉部位
-            </button>
-          </form>
-
-          <!-- B. 平倉表單 -->
-          <form id="form-close" onsubmit="closeLot(event)" class="space-y-3 hidden">
-            <div>
-              <label class="text-[11px] text-slate-400 block mb-0.5">平倉時間：</label>
-              <input
-                type="text"
-                id="close-date"
-                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-              >
-            </div>
-
-            <div>
-              <label class="text-[11px] text-slate-400 block mb-0.5">🎯 選擇要沖銷的單子 (後進先出/指定沖銷)：</label>
-              <select
-                id="close-lot-selector"
-                onchange="onSelectLotToClose(this.value)"
-                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-                required
-              >
-                <option value="">-- 請指定一筆持倉進行平倉 --</option>
-              </select>
-              <span id="close-lot-error" class="hidden text-[9px] text-rose-400 mt-1 block">目前無任何未平倉部位。</span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-[11px] text-slate-400 block mb-0.5">平倉價格 (點)：</label>
-                <input
-                  type="number"
-                  step="any"
-                  id="close-price"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-200"
-                  placeholder="例如: 20100"
-                  required
-                >
-              </div>
-              <div>
-                <label class="text-[11px] text-slate-400 block mb-0.5">平倉口數 (口)：</label>
-                <input
-                  type="number"
-                  id="close-qty"
-                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-indigo-500 text-slate-200"
-                  value="1"
-                  required
-                >
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              id="btn-close-submit"
-              class="w-full py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold rounded-lg transition text-white shadow-md"
-            >
-              確認指定平倉沖銷
-            </button>
-          </form>
-
-        </div>
-
-      </div>
-
-      <!-- 右側：持倉明細與歷史紀錄 -->
-      <div class="lg:col-span-7 space-y-4">
-        
-        <!-- 1. 未平倉持倉明細 -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
-          <div class="flex justify-between items-center mb-3">
-            <div>
-              <h3 class="text-xs sm:text-sm font-bold text-indigo-400">📦 未平倉部位 (當前持倉)</h3>
-              <p class="text-[10px] text-slate-400">點擊 ⚡ 按鈕可手動指定該筆部位進行平倉沖銷</p>
-            </div>
-            <span id="open-lots-badge" class="text-[10px] bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded-full font-bold border border-indigo-850">
-              共 0 筆
-            </span>
-          </div>
-
-          <!-- 未平倉清單 -->
-          <div id="open-lots-container" class="space-y-2 max-h-64 overflow-y-auto pr-1">
-            <!-- 動態生成 -->
+              <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-lg transition text-white shadow-md">
+                確認登錄對鎖/一般單
+              </button>
+            </form>
           </div>
         </div>
 
-        <!-- 2. 已平倉歷史明細 -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
-          <div class="flex justify-between items-center mb-3">
-            <div>
-              <h3 class="text-xs sm:text-sm font-bold text-rose-400">🧾 歷史已平倉 (指定沖銷明細)</h3>
-              <p class="text-[10px] text-slate-400">已結算平倉清單，刪除記錄會自動退還持倉口數</p>
+        <!-- 右側：明細列表 -->
+        <div class="lg:col-span-7 space-y-4">
+          <!-- 未平倉明細 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <div class="flex justify-between items-center mb-3">
+              <div>
+                <h3 class="text-xs sm:text-sm font-bold text-indigo-400">📦 未平倉部位 (當前持倉)</h3>
+                <p class="text-[10px] text-slate-400">系統自動依據次月價差計算出等效成本</p>
+              </div>
+              <span id="lock-open-badge" class="text-[10px] bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded-full font-bold">共 0 筆</span>
             </div>
-            <span id="closed-records-badge" class="text-[10px] bg-rose-900/40 text-rose-300 px-2 py-0.5 rounded-full font-bold border border-rose-850">
-              共 0 筆
-            </span>
+            <div id="lock-open-container" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
           </div>
 
-          <!-- 已平倉清單 -->
-          <div id="closed-records-container" class="space-y-2 max-h-64 overflow-y-auto pr-1">
-            <!-- 動態生成 -->
+          <!-- 已平倉歷史 -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md">
+            <div class="flex justify-between items-center mb-3">
+              <div>
+                <h3 class="text-xs sm:text-sm font-bold text-rose-400">🧾 歷史已平倉記錄 (對鎖區間)</h3>
+                <p class="text-[10px] text-slate-400">已平倉對沖列表</p>
+              </div>
+              <span id="lock-closed-badge" class="text-[10px] bg-rose-900/40 text-rose-300 px-2 py-0.5 rounded-full font-bold">共 0 筆</span>
+            </div>
+            <div id="lock-closed-container" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
           </div>
         </div>
 
       </div>
 
-    </div>
+    </main>
+  </div>
 
-  </main>
 
-  <!-- 自訂二次確認對話盒 (取代 alert / confirm) -->
+  <!-- 二次確認對話盒 -->
   <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
       <div class="text-center space-y-3">
         <span class="text-4xl text-amber-500"><i class="fa-solid fa-triangle-exclamation animate-bounce"></i></span>
         <h3 class="text-base font-bold text-slate-100">確定要清空所有資料嗎？</h3>
-        <p class="text-xs text-slate-400">
-          此動作將會立即刪除所有存在本機中的未平倉持倉與歷史平倉紀錄，且無法復原。
-        </p>
+        <p class="text-xs text-slate-400">此動作將一併清除 LIFO 沖銷帳本 與 對鎖區間帳本，無法復原。</p>
         <div class="grid grid-cols-2 gap-2 pt-4">
-          <button
-            onclick="hideConfirmModal()"
-            class="py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold transition text-slate-300"
-          >
-            取消
-          </button>
-          <button
-            onclick="clearAllData()"
-            class="py-2 bg-rose-600 hover:bg-rose-500 rounded-lg text-xs font-semibold text-white transition"
-          >
-            確定清空
-          </button>
+          <button onclick="hideConfirmModal()" class="py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-semibold text-slate-300">取消</button>
+          <button onclick="clearAllData()" class="py-2 bg-rose-600 hover:bg-rose-500 rounded-lg text-xs font-semibold text-white">確定清空</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast 訊息提示元件 -->
+  <!-- Toast 訊息元件 -->
   <div id="toast" class="pointer-events-none fixed bottom-6 left-1/2 -translate-x-1/2 z-50 p-3.5 rounded-xl shadow-2xl border flex items-center gap-3 backdrop-blur-md max-w-sm transition-all duration-300 opacity-0 transform translate-y-2">
     <span id="toast-text" class="text-xs font-bold text-slate-100"></span>
   </div>
 
-  <!-- 頁尾 -->
   <footer class="bg-slate-900 border-t border-slate-800 text-center py-4 text-[10px] text-slate-500 mt-auto">
     <div class="max-w-7xl mx-auto px-4">
-      <p>© 2026 期貨指定沖銷手機離線版 · 數據自動儲存於此裝置</p>
+      <p>© 2026 期貨自主沖銷與對鎖計算器 · 數據自動儲存於此裝置</p>
     </div>
   </footer>
 
   <script>
     // ==========================================
-    // 預設常數與合約點數
+    // 常數與設定
     // ==========================================
     const CONTRACTS = {
       TX: { name: '臺股期貨大台 (TX)', pointValue: 200 },
@@ -486,28 +584,39 @@
     };
 
     // ==========================================
-    // 全域 App 狀態
+    // 全域 App 狀態 (納入對鎖資料)
     // ==========================================
     let state = {
-      openLots: [],        // 未平倉與部分平倉庫存 [{ id, date, direction, price, originalQty, remainingQty }]
-      closedRecords: [],   // 歷史平倉記錄 [{ id, openDate, closeDate, direction, openPrice, closePrice, qty }]
-      contractType: 'MXF', // 目前合約
-      currentMarketPrice: 20050, // 動態洗價
-      formAction: 'OPEN',  // 'OPEN' or 'CLOSE'
-      openForm: {
-        direction: 'LONG'  // 'LONG' or 'SHORT'
+      activeMainTab: 'LIFO', // 'LIFO' or 'LOCK'
+      
+      // Tab 1: LIFO 資料
+      openLots: [],
+      closedRecords: [],
+      contractType: 'MXF',
+      currentMarketPrice: 20050,
+      formAction: 'OPEN',
+      openForm: { direction: 'LONG' },
+
+      // Tab 2: 對鎖資料
+      lockingLots: [],        // 對鎖持倉
+      lockingClosed: [],      // 對鎖歷史已平倉
+      lockingSpread: 200,     // 次月價差 (Requirement 1)
+      lockingIndex: 46500,    // 目前指數 (Requirement 1)
+      lockForm: {
+        type: 'NORMAL',       // 'NORMAL' (一般單) or 'LOCK' (對鎖單)
+        action: 'OPEN',       // 'OPEN' or 'CLOSE'
+        direction: 'LONG'     // 'LONG' or 'SHORT'
       }
     };
 
     // ==========================================
-    // 安全 LocalStorage 讀寫包裝
+    // 本地存取包裝
     // ==========================================
     function safeLoad(key, defaultValue) {
       try {
         const saved = localStorage.getItem(key);
         return saved ? JSON.parse(saved) : defaultValue;
       } catch (e) {
-        console.warn(`[Storage Warning] 無法讀取 ${key}: 可能是沙盒環境限制。`, e);
         return defaultValue;
       }
     }
@@ -517,74 +626,67 @@
         localStorage.setItem(key, JSON.stringify(value));
         return true;
       } catch (e) {
-        console.warn(`[Storage Warning] 無法寫入 ${key}: 可能是沙盒環境限制。`, e);
         return false;
       }
     }
 
     // ==========================================
-    // 初始化與檢測
+    // 初始化
     // ==========================================
     window.onload = function() {
-      // 1. 檢測儲存健康度
       try {
-        localStorage.setItem('__test_storage__', 'ok');
-        localStorage.removeItem('__test_storage__');
-        // 如果支援本機儲存，就不顯示警告，但若是 sandbox iframe，一定會拋錯
+        localStorage.setItem('__test__', '1');
+        localStorage.removeItem('__test__');
       } catch (e) {
         document.getElementById('storage-alert').classList.remove('hidden');
       }
 
-      // 2. 載入本地儲存資料
+      // 載入資料 (Tab 1)
       state.openLots = safeLoad('futures_open_lots', []);
       state.closedRecords = safeLoad('futures_closed_records', []);
       state.contractType = localStorage.getItem('futures_contract_type') || 'MXF';
       const savedPrice = localStorage.getItem('futures_market_price');
       state.currentMarketPrice = savedPrice ? parseFloat(savedPrice) : 20050;
 
-      // 3. 設定預設日期時間
-      resetFormDates();
+      // 載入資料 (Tab 2)
+      state.lockingLots = safeLoad('futures_lock_lots', []);
+      state.lockingClosed = safeLoad('futures_lock_closed', []);
+      const savedSpread = localStorage.getItem('futures_lock_spread');
+      state.lockingSpread = savedSpread ? parseFloat(savedSpread) : 200;
+      const savedIndex = localStorage.getItem('futures_lock_index');
+      state.lockingIndex = savedIndex ? parseFloat(savedIndex) : 46500;
 
-      // 4. 同步與渲染 UI
-      syncContractUI();
-      document.getElementById('market-price-input').value = state.currentMarketPrice;
-      renderAll();
-    };
-
-    function resetFormDates() {
+      // 時間預設值
       const nowStr = getNowDateTimeString();
       document.getElementById('open-date').value = nowStr;
       document.getElementById('close-date').value = nowStr;
-    }
+      document.getElementById('lock-form-date').value = nowStr;
+
+      // 同步 UI 數值
+      document.getElementById('market-price-input').value = state.currentMarketPrice;
+      document.getElementById('lock-spread-input').value = state.lockingSpread;
+      document.getElementById('lock-index-input').value = state.lockingIndex;
+
+      syncContractUI();
+      renderAll();
+    };
 
     function getNowDateTimeString() {
       const now = new Date();
       const pad = (num) => String(num).padStart(2, '0');
-      const yyyy = now.getFullYear();
-      const mm = pad(now.getMonth() + 1);
-      const dd = pad(now.getDate());
-      const hh = pad(now.getHours());
-      const min = pad(now.getMinutes());
-      return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
     }
 
-    // ==========================================
-    // 系統 UI 切換
-    // ==========================================
     function toggleTools() {
-      const panel = document.getElementById('tools-panel');
-      panel.classList.toggle('hidden');
+      document.getElementById('tools-panel').classList.toggle('hidden');
     }
 
     function showToast(text, type = 'info') {
       const toast = document.getElementById('toast');
       const toastText = document.getElementById('toast-text');
-      
       toastText.innerText = text;
       
-      // 移除舊類別
       toast.className = toast.className.replace(/bg-\w+-\d+/g, '');
-      
       if (type === 'success') {
         toast.classList.add('bg-emerald-900', 'border-emerald-500', 'text-emerald-200');
       } else if (type === 'error') {
@@ -592,17 +694,14 @@
       } else {
         toast.classList.add('bg-slate-900', 'border-indigo-500', 'text-indigo-200');
       }
-
       toast.classList.remove('opacity-0', 'translate-y-2');
       toast.classList.add('opacity-100', 'translate-y-0');
-
       setTimeout(() => {
         toast.classList.remove('opacity-100', 'translate-y-0');
         toast.classList.add('opacity-0', 'translate-y-2');
       }, 3000);
     }
 
-    // 二次確認 Modal
     function showConfirmModal() {
       document.getElementById('confirm-modal').classList.remove('hidden');
     }
@@ -612,56 +711,69 @@
     }
 
     // ==========================================
-    // 核心數據計算與渲染 (核心點數算法)
+    // 雙主頁籤切換系統
+    // ==========================================
+    function switchMainTab(tab) {
+      state.activeMainTab = tab;
+      const tabLifo = document.getElementById('main-tab-lifo');
+      const tabLock = document.getElementById('main-tab-lock');
+      const panelLifo = document.getElementById('panel-lifo');
+      const panelLock = document.getElementById('panel-lock');
+
+      if (tab === 'LIFO') {
+        tabLifo.className = "flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-indigo-500 text-white flex items-center justify-center gap-1.5 transition";
+        tabLock.className = "flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition";
+        panelLifo.classList.remove('hidden');
+        panelLock.classList.add('hidden');
+      } else {
+        tabLock.className = "flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-amber-500 text-white flex items-center justify-center gap-1.5 transition";
+        tabLifo.className = "flex-1 py-3 text-xs sm:text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 transition";
+        panelLock.classList.remove('hidden');
+        panelLifo.classList.add('hidden');
+        
+        // 切換時重設對鎖時間
+        document.getElementById('lock-form-date').value = getNowDateTimeString();
+        populateLockCloseSelector();
+      }
+    }
+
+    // ==========================================
+    // 渲染與計算
     // ==========================================
     function renderAll() {
       const pointValue = CONTRACTS[state.contractType].pointValue;
-      
-      // 1. 計算多空持倉平均與數量
+
+      // ---- 1. LIFO 主畫面渲染與計算 ----
       let longSum = 0, longQty = 0;
       let shortSum = 0, shortQty = 0;
-
       state.openLots.forEach(lot => {
         if (lot.remainingQty > 0) {
           if (lot.direction === 'LONG') {
-            longSum += lot.price * lot.remainingQty;
-            longQty += lot.remainingQty;
+            longSum += lot.price * lot.remainingQty; longQty += lot.remainingQty;
           } else {
-            shortSum += lot.price * lot.remainingQty;
-            shortQty += lot.remainingQty;
+            shortSum += lot.price * lot.remainingQty; shortQty += lot.remainingQty;
           }
         }
       });
-
       const longAvg = longQty > 0 ? Math.round(longSum / longQty) : 0;
       const shortAvg = shortQty > 0 ? Math.round(shortSum / shortQty) : 0;
-
-      // 渲染多空統計
       document.getElementById('long-summary').innerText = longQty > 0 ? `${longAvg.toLocaleString()} 點 (${longQty}口)` : '無部位';
       document.getElementById('short-summary').innerText = shortQty > 0 ? `${shortAvg.toLocaleString()} 點 (${shortQty}口)` : '無部位';
       document.getElementById('contract-spec').innerText = `合約規格：${CONTRACTS[state.contractType].name} (1點=${pointValue}元)`;
 
-      // 2. 計算損益
       let unrealized = 0;
       state.openLots.forEach(lot => {
         if (lot.remainingQty <= 0) return;
-        const diff = lot.direction === 'LONG'
-          ? state.currentMarketPrice - lot.price
-          : lot.price - state.currentMarketPrice;
+        const diff = lot.direction === 'LONG' ? state.currentMarketPrice - lot.price : lot.price - state.currentMarketPrice;
         unrealized += diff * lot.remainingQty * pointValue;
       });
-
       let realized = 0;
       state.closedRecords.forEach(rec => {
-        const diff = rec.direction === 'LONG'
-          ? rec.closePrice - rec.openPrice
-          : rec.openPrice - rec.closePrice;
+        const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
         realized += diff * rec.qty * pointValue;
       });
-
       const totalPnL = unrealized + realized;
 
-      // 渲染三大損益面板
       const unrealizedEl = document.getElementById('unrealized-pnl');
       unrealizedEl.innerText = `${unrealized >= 0 ? '+' : ''}${unrealized.toLocaleString()}元`;
       unrealizedEl.className = `text-xs sm:text-sm font-extrabold font-mono block truncate ${unrealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
@@ -674,46 +786,115 @@
       totalEl.innerText = `${totalPnL >= 0 ? '+' : ''}${totalPnL.toLocaleString()} 元`;
       totalEl.className = `text-base sm:text-lg font-extrabold font-mono tracking-tight ${totalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
 
-      // 卡片顏色外框變化
       const card = document.getElementById('total-pnl-card');
       card.className = `rounded-xl p-3 sm:p-4 shadow-lg flex flex-col justify-between border ${
         totalPnL >= 0 ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-rose-950/20 border-rose-500/30'
       }`;
 
-      // 3. 渲染未平倉部位與平倉選單
       renderOpenLotsList(pointValue);
       renderClosedRecordsList(pointValue);
       populateCloseLotSelector();
+
+
+      // ---- 2. LOCK 對鎖主畫面渲染與計算 (Requirement 3) ----
+      document.getElementById('lock-contract-spec').innerText = `${CONTRACTS[state.contractType].name} (1點=${pointValue}元)`;
+      
+      let lockLongSum = 0, lockLongQty = 0, minLongAdj = Infinity;
+      let lockShortSum = 0, lockShortQty = 0, maxShortAdj = -Infinity;
+
+      state.lockingLots.forEach(lot => {
+        if (lot.remainingQty > 0) {
+          // 折算等效成本 (Requirement 1)
+          const adjPrice = lot.orderType === 'LOCK' ? lot.price - state.lockingSpread : lot.price;
+          if (lot.direction === 'LONG') {
+            lockLongSum += adjPrice * lot.remainingQty;
+            lockLongQty += lot.remainingQty;
+            if (adjPrice < minLongAdj) minLongAdj = adjPrice;
+          } else {
+            lockShortSum += adjPrice * lot.remainingQty;
+            lockShortQty += lot.remainingQty;
+            if (adjPrice > maxShortAdj) maxShortAdj = adjPrice;
+          }
+        }
+      });
+
+      // 顯示多空均價看板 (等效折算後均價)
+      const lockLongAvg = lockLongQty > 0 ? Math.round(lockLongSum / lockLongQty) : 0;
+      const lockShortAvg = lockShortQty > 0 ? Math.round(lockShortSum / lockShortQty) : 0;
+      document.getElementById('lock-long-summary').innerText = lockLongQty > 0 ? `${lockLongAvg.toLocaleString()} 點 (${lockLongQty}口)` : '無部位';
+      document.getElementById('lock-short-summary').innerText = lockShortQty > 0 ? `${lockShortAvg.toLocaleString()} 點 (${lockShortQty}口)` : '無部位';
+
+      // 顯示對鎖區間 (最低多單 ~ 最高空單) (Requirement 3)
+      const rangeEl = document.getElementById('locking-range-display');
+      if (lockLongQty > 0 && lockShortQty > 0) {
+        const lowerBound = Math.min(minLongAdj, maxShortAdj);
+        const upperBound = Math.max(minLongAdj, maxShortAdj);
+        rangeEl.innerText = `${lowerBound.toLocaleString()} ~ ${upperBound.toLocaleString()}`;
+      } else {
+        rangeEl.innerText = '無對鎖部位';
+      }
+
+      // 未平倉對鎖損益
+      let lockUnrealized = 0;
+      state.lockingLots.forEach(lot => {
+        if (lot.remainingQty <= 0) return;
+        const adjPrice = lot.orderType === 'LOCK' ? lot.price - state.lockingSpread : lot.price;
+        const diff = lot.direction === 'LONG' ? state.lockingIndex - adjPrice : adjPrice - state.lockingIndex;
+        lockUnrealized += diff * lot.remainingQty * pointValue;
+      });
+
+      // 已平倉對鎖損益
+      let lockRealized = 0;
+      state.lockingClosed.forEach(rec => {
+        const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
+        lockRealized += diff * rec.qty * pointValue;
+      });
+
+      const lockTotalPnL = lockUnrealized + lockRealized;
+
+      const lUnrealEl = document.getElementById('lock-unrealized-display');
+      lUnrealEl.innerText = `${lockUnrealized >= 0 ? '+' : ''}${lockUnrealized.toLocaleString()} 元`;
+      lUnrealEl.className = `text-base font-extrabold font-mono ${lockUnrealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      const lRealEl = document.getElementById('lock-realized-display');
+      lRealEl.innerText = `${lockRealized >= 0 ? '+' : ''}${lockRealized.toLocaleString()} 元`;
+      lRealEl.className = `text-base font-extrabold font-mono ${lockRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      const lTotEl = document.getElementById('lock-total-display');
+      lTotEl.innerText = `${lockTotalPnL >= 0 ? '+' : ''}${lockTotalPnL.toLocaleString()} 元`;
+      lTotEl.className = `text-base sm:text-lg font-extrabold font-mono ${lockTotalPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      const lCard = document.getElementById('lock-total-card');
+      lCard.className = `rounded-xl p-3 shadow-lg flex flex-col justify-between border ${
+        lockTotalPnL >= 0 ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-rose-950/20 border-rose-500/30'
+      }`;
+
+      renderLockOpenList(pointValue);
+      renderLockClosedList(pointValue);
+      populateLockCloseSelector();
     }
 
-    // 未平倉部位清單渲染
+    // ==========================================
+    // TAB 1: LIFO 記帳專屬輔助渲染
+    // ==========================================
     function renderOpenLotsList(pointValue) {
       const container = document.getElementById('open-lots-container');
       const activeLots = state.openLots.filter(l => l.remainingQty > 0);
       document.getElementById('open-lots-badge').innerText = `共 ${activeLots.length} 筆`;
 
       if (activeLots.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950">
-            <p class="text-xs text-slate-500">目前持倉中無未平倉部位。</p>
-          </div>
-        `;
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">目前持倉中無未平倉部位。</p></div>`;
         return;
       }
 
       container.innerHTML = activeLots.map(lot => {
-        const diff = lot.direction === 'LONG'
-          ? state.currentMarketPrice - lot.price
-          : lot.price - state.currentMarketPrice;
+        const diff = lot.direction === 'LONG' ? state.currentMarketPrice - lot.price : lot.price - state.currentMarketPrice;
         const lotPnL = diff * lot.remainingQty * pointValue;
-        const colorClass = lotPnL >= 0 ? 'text-emerald-400' : 'text-rose-400';
-        const badgeColor = lot.direction === 'LONG' ? 'bg-emerald-950 text-emerald-400 border-emerald-900/30' : 'bg-rose-950 text-rose-400 border-rose-900/30';
-
         return `
           <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 flex justify-between items-center hover:border-slate-700 transition">
             <div>
               <div class="flex items-center gap-1.5 mb-1">
-                <span class="text-[9px] px-1 rounded font-bold ${badgeColor}">
+                <span class="text-[9px] px-1 rounded font-bold ${lot.direction === 'LONG' ? 'bg-emerald-950 text-emerald-400 border-emerald-900/30' : 'bg-rose-950 text-rose-400 border-rose-900/30'}">
                   ${lot.direction === 'LONG' ? '多 BUY' : '空 SELL'}
                 </span>
                 <span class="text-[9px] text-slate-500 font-mono">${lot.date}</span>
@@ -725,23 +906,13 @@
             <div class="flex items-center gap-2.5">
               <div class="text-right">
                 <span class="text-[9px] text-slate-400 block">當前損益</span>
-                <span class="text-xs font-bold font-mono ${colorClass}">
+                <span class="text-xs font-bold font-mono ${lotPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
                   ${lotPnL >= 0 ? '+' : ''}${lotPnL.toLocaleString()}元
                 </span>
               </div>
               <div class="flex flex-col gap-1">
-                <button
-                  onclick="triggerQuickClose('${lot.id}')"
-                  class="px-2 py-0.5 bg-rose-950/40 hover:bg-rose-900/40 border border-rose-850 text-rose-300 text-[10px] rounded font-bold transition flex items-center gap-0.5"
-                >
-                  ⚡ 平倉
-                </button>
-                <button
-                  onclick="deleteOpenLot('${lot.id}')"
-                  class="text-slate-500 hover:text-slate-400 text-[10px] text-center transition"
-                >
-                  刪除
-                </button>
+                <button onclick="triggerQuickClose('${lot.id}')" class="px-2 py-0.5 bg-rose-950/40 hover:bg-rose-900/40 border border-rose-850 text-rose-300 text-[10px] rounded font-bold">⚡ 平倉</button>
+                <button onclick="deleteOpenLot('${lot.id}')" class="text-slate-500 hover:text-slate-400 text-[10px] text-center">刪除</button>
               </div>
             </div>
           </div>
@@ -749,63 +920,39 @@
       }).join('');
     }
 
-    // 歷史平倉記錄清單渲染
     function renderClosedRecordsList(pointValue) {
       const container = document.getElementById('closed-records-container');
       document.getElementById('closed-records-badge').innerText = `共 ${state.closedRecords.length} 筆`;
 
       if (state.closedRecords.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950">
-            <p class="text-xs text-slate-500">目前尚無已平倉平結記錄。</p>
-          </div>
-        `;
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">目前尚無平平平結記錄。</p></div>`;
         return;
       }
 
       container.innerHTML = state.closedRecords.map(rec => {
-        const diff = rec.direction === 'LONG'
-          ? rec.closePrice - rec.openPrice
-          : rec.openPrice - rec.closePrice;
+        const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
         const pnl = diff * rec.qty * pointValue;
-        const colorClass = pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
-
         return `
-          <div class="bg-slate-950 border border-slate-850 rounded-lg p-2.5 flex justify-between items-center hover:border-slate-800 transition">
+          <div class="bg-slate-950 border border-slate-850 rounded-lg p-2.5 flex justify-between items-center">
             <div>
               <div class="flex items-center gap-1.5 mb-1">
-                <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-bold">
-                  ${rec.direction === 'LONG' ? '多單平' : '空單平'}
-                </span>
-                <span class="text-[9px] text-slate-500 font-mono">
-                  ${rec.closeDate.split(' ')[1] || rec.closeDate} 沖銷
-                </span>
+                <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-bold">${rec.direction === 'LONG' ? '多單平' : '空單平'}</span>
+                <span class="text-[9px] text-slate-500 font-mono">${rec.closeDate.split(' ')[1] || rec.closeDate} 沖銷</span>
               </div>
-              <div class="text-xs text-slate-300">
-                ${rec.openPrice} ➔ ${rec.closePrice} | ${rec.qty} 口
-              </div>
+              <div class="text-xs text-slate-300">${rec.openPrice} ➔ ${rec.closePrice} | ${rec.qty} 口</div>
             </div>
             <div class="flex items-center gap-3">
               <div class="text-right">
                 <span class="text-[9px] text-slate-500 block">平倉已實現</span>
-                <span class="text-xs font-bold font-mono ${colorClass}">
-                  ${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元
-                </span>
+                <span class="text-xs font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元</span>
               </div>
-              <button
-                onclick="deleteClosedRecord('${rec.id}')"
-                class="text-rose-400 hover:text-rose-300 p-1 transition"
-                title="還原此筆平倉"
-              >
-                <i class="fa-solid fa-trash-can text-xs"></i>
-              </button>
+              <button onclick="deleteClosedRecord('${rec.id}')" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
             </div>
           </div>
         `;
       }).join('');
     }
 
-    // 平倉選擇器下拉選單載入
     function populateCloseLotSelector() {
       const selector = document.getElementById('close-lot-selector');
       const activeLots = state.openLots.filter(l => l.remainingQty > 0);
@@ -824,17 +971,11 @@
       document.getElementById('btn-close-submit').classList.remove('opacity-50', 'cursor-not-allowed');
 
       const savedSelectedId = selector.value;
-
       let optionsHtml = '<option value="">-- 請指定一筆持倉進行平倉 --</option>';
       activeLots.forEach(lot => {
-        const timePart = lot.date.split(' ')[1] || lot.date;
-        const dirLabel = lot.direction === 'LONG' ? '多單 LONG' : '空單 SHORT';
-        optionsHtml += `<option value="${lot.id}">[建倉 ${timePart}] ${dirLabel} @ ${lot.price} 點 (剩餘 ${lot.remainingQty} 口)</option>`;
+        optionsHtml += `<option value="${lot.id}">[建倉 ${lot.date.split(' ')[1] || lot.date}] ${lot.direction === 'LONG' ? '多單 LONG' : '空單 SHORT'} @ ${lot.price} (剩餘 ${lot.remainingQty} 口)</option>`;
       });
-
       selector.innerHTML = optionsHtml;
-      
-      // 嘗試還原先前選定的狀態
       if (savedSelectedId && activeLots.some(l => l.id === savedSelectedId)) {
         selector.value = savedSelectedId;
       }
@@ -844,17 +985,133 @@
       if (!lotId) return;
       const lot = state.openLots.find(l => l.id === lotId);
       if (lot) {
-        // 設定預設平倉口數為 1 口
         document.getElementById('close-qty').value = "1";
         document.getElementById('close-price').value = state.currentMarketPrice;
       }
     }
 
     // ==========================================
-    // 記帳操作核心事件 (與狀態管理)
+    // TAB 2: 對鎖計算專屬輔助渲染
     // ==========================================
-    
-    // 1. 新增建倉部位
+    function renderLockOpenList(pointValue) {
+      const container = document.getElementById('lock-open-container');
+      const activeLots = state.lockingLots.filter(l => l.remainingQty > 0);
+      document.getElementById('lock-open-badge').innerText = `共 ${activeLots.length} 筆`;
+
+      if (activeLots.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">目前無對鎖/一般持倉部位。</p></div>`;
+        return;
+      }
+
+      container.innerHTML = activeLots.map(lot => {
+        const isLock = lot.orderType === 'LOCK';
+        const adjPrice = isLock ? lot.price - state.lockingSpread : lot.price;
+        const diff = lot.direction === 'LONG' ? state.lockingIndex - adjPrice : adjPrice - state.lockingIndex;
+        const pnl = diff * lot.remainingQty * pointValue;
+        
+        const badgeColor = lot.direction === 'LONG' ? 'bg-emerald-950 text-emerald-400 border-emerald-900/30' : 'bg-rose-950 text-rose-400 border-rose-900/30';
+        const typeBadge = isLock ? 'bg-amber-950 text-amber-300 border-amber-900/30' : 'bg-slate-800 text-slate-300 border-slate-700/50';
+
+        return `
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 flex justify-between items-center hover:border-slate-700 transition">
+            <div>
+              <div class="flex items-center gap-1 mb-1 flex-wrap">
+                <span class="text-[9px] px-1 rounded font-bold ${typeBadge}">
+                  ${isLock ? '次月對鎖' : '當月一般'}
+                </span>
+                <span class="text-[9px] px-1 rounded font-bold ${badgeColor}">
+                  ${lot.direction === 'LONG' ? '多 Long' : '空 Short'}
+                </span>
+                <span class="text-[9px] text-slate-500 font-mono">${lot.date}</span>
+              </div>
+              <div class="text-xs font-bold text-slate-200">
+                開倉價：${lot.price.toLocaleString()} ${isLock ? `<span class="text-[10px] text-amber-500 font-medium">(折算當月: ${adjPrice.toLocaleString()})</span>` : ''}
+              </div>
+              <div class="text-[10px] text-slate-400">
+                庫存數量：${lot.remainingQty} 口 / 原始：${lot.originalQty} 口
+              </div>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <div class="text-right">
+                <span class="text-[9px] text-slate-400 block">等效損益</span>
+                <span class="text-xs font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+                  ${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元
+                </span>
+              </div>
+              <div class="flex flex-col gap-1">
+                <button onclick="triggerLockQuickClose('${lot.id}')" class="px-2 py-0.5 bg-rose-950/40 border border-rose-850 text-rose-300 text-[10px] rounded font-bold">⚡ 平倉</button>
+                <button onclick="deleteLockOpenLot('${lot.id}')" class="text-slate-500 hover:text-slate-400 text-[10px] text-center">刪除</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderLockClosedList(pointValue) {
+      const container = document.getElementById('lock-closed-container');
+      document.getElementById('lock-closed-badge').innerText = `共 ${state.lockingClosed.length} 筆`;
+
+      if (state.lockingClosed.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">無任何對鎖/一般已平平結記錄。</p></div>`;
+        return;
+      }
+
+      container.innerHTML = state.lockingClosed.map(rec => {
+        const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
+        const pnl = diff * rec.qty * pointValue;
+        return `
+          <div class="bg-slate-950 border border-slate-850 rounded-lg p-2.5 flex justify-between items-center">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-bold">${rec.direction === 'LONG' ? '多平倉' : '空平倉'}</span>
+                <span class="text-[9px] text-slate-500 font-mono">${rec.closeDate.split(' ')[1] || rec.closeDate} 平</span>
+              </div>
+              <div class="text-xs text-slate-300">
+                建倉價 ${rec.openPrice} ➔ 平倉價 ${rec.closePrice} | ${rec.qty} 口
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <span class="text-[9px] text-slate-500 block">平倉盈虧</span>
+                <span class="text-xs font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+                  ${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元
+                </span>
+              </div>
+              <button onclick="deleteLockClosedRecord('${rec.id}')" class="text-rose-400 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function populateLockCloseSelector() {
+      const selector = document.getElementById('lock-close-selector');
+      const activeLots = state.lockingLots.filter(l => l.remainingQty > 0);
+      
+      if (activeLots.length === 0) {
+        selector.innerHTML = '<option value="">-- 目前無未平倉部位 --</option>';
+        return;
+      }
+
+      const savedSelectedId = selector.value;
+      let optionsHtml = '<option value="">-- 請指定一筆持倉進行平倉 --</option>';
+      activeLots.forEach(lot => {
+        const isLock = lot.orderType === 'LOCK';
+        const typeStr = isLock ? '對鎖單' : '一般單';
+        const timeStr = lot.date.split(' ')[1] || lot.date;
+        optionsHtml += `<option value="${lot.id}">[${typeStr} ${timeStr}] ${lot.direction === 'LONG' ? '多' : '空'} @ 原價${lot.price} (餘 ${lot.remainingQty} 口)</option>`;
+      });
+
+      selector.innerHTML = optionsHtml;
+      if (savedSelectedId && activeLots.some(l => l.id === savedSelectedId)) {
+        selector.value = savedSelectedId;
+      }
+    }
+
+    // ==========================================
+    // TAB 1: LIFO 記帳事件處理
+    // ==========================================
     function addOpenLot(e) {
       e.preventDefault();
       const price = parseFloat(document.getElementById('open-price').value);
@@ -862,32 +1119,26 @@
       const date = document.getElementById('open-date').value;
 
       if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
-        showToast('請輸入正確的成交價格與建倉口數！', 'error');
-        return;
+        showToast('請輸入正確價格與數量！', 'error'); return;
       }
 
-      const newLot = {
+      state.openLots.unshift({
         id: `lot-${Date.now()}`,
-        date: date,
+        date,
         direction: state.openForm.direction,
         price,
         originalQty: qty,
         remainingQty: qty
-      };
+      });
 
-      state.openLots.unshift(newLot); // 新增的在前面
-      
-      // 儲存至本地並重置表單價格
       persistData();
       document.getElementById('open-price').value = '';
-      document.getElementById('open-qty').value = '1'; // 重置回預設 1 口
+      document.getElementById('open-qty').value = '1';
       resetFormDates();
-      
       renderAll();
-      showToast(`成功新增：${state.openForm.direction === 'LONG' ? '多單' : '空單'} ${qty} 口！`, 'success');
+      showToast('成功新增建倉部位！', 'success');
     }
 
-    // 2. 指定平倉部位
     function closeLot(e) {
       e.preventDefault();
       const lotId = document.getElementById('close-lot-selector').value;
@@ -895,112 +1146,79 @@
       const closeQty = parseInt(document.getElementById('close-qty').value);
       const date = document.getElementById('close-date').value;
 
-      if (!lotId) {
-        showToast('請指定要平倉的建倉單子！', 'error');
-        return;
-      }
+      if (!lotId) { showToast('請指定要沖銷的持倉！', 'error'); return; }
 
-      const targetIdx = state.openLots.findIndex(l => l.id === lotId);
-      if (targetIdx === -1) return;
-      const targetLot = state.openLots[targetIdx];
+      const idx = state.openLots.findIndex(l => l.id === lotId);
+      if (idx === -1) return;
+      const targetLot = state.openLots[idx];
 
       if (isNaN(closePrice) || closePrice <= 0 || isNaN(closeQty) || closeQty <= 0) {
-        showToast('請輸入正確的平倉價格與平倉口數！', 'error');
-        return;
+        showToast('請輸入正確的平倉資訊！', 'error'); return;
       }
-
       if (closeQty > targetLot.remainingQty) {
-        showToast(`平倉口數 (${closeQty} 口) 超過該筆單剩餘庫存 (${targetLot.remainingQty} 口)！`, 'error');
-        return;
+        showToast(`平倉口數不能超過餘量 (${targetLot.remainingQty}口)！`, 'error'); return;
       }
 
-      // 更新持倉口數
-      state.openLots[targetIdx].remainingQty -= closeQty;
-
-      // 產生平倉沖銷記錄
-      const newRec = {
+      state.openLots[idx].remainingQty -= closeQty;
+      state.closedRecords.unshift({
         id: `close-${Date.now()}`,
         openDate: targetLot.date,
         closeDate: date,
         direction: targetLot.direction,
         openPrice: targetLot.price,
-        closePrice: closePrice,
+        closePrice,
         qty: closeQty
-      };
-      state.closedRecords.unshift(newRec);
+      });
 
-      // 儲存、重設表單與渲染
       persistData();
       document.getElementById('close-lot-selector').value = '';
       document.getElementById('close-price').value = '';
-      document.getElementById('close-qty').value = '1'; // 平完重設為 1 口
+      document.getElementById('close-qty').value = '1';
       resetFormDates();
-
       renderAll();
-      showToast('平倉沖銷成功！', 'success');
+      showToast('指定平倉沖銷成功！', 'success');
     }
 
-    // 3. ⚡ 快速指定平倉
     function triggerQuickClose(lotId) {
       const lot = state.openLots.find(l => l.id === lotId);
       if (!lot) return;
-
       switchFormAction('CLOSE');
-      
-      // 自動設定選單與預設值
-      const selector = document.getElementById('close-lot-selector');
-      selector.value = lotId;
+      document.getElementById('close-lot-selector').value = lotId;
       document.getElementById('close-price').value = state.currentMarketPrice;
-      
-      // 平倉口數預設 1 口 (但也允許用戶自行修改至其上限)
       document.getElementById('close-qty').value = "1";
-      
-      showToast(`已自動選擇該筆部位進行平倉設定。`, 'info');
+      showToast('已選擇特定部位進行 LIFO 指定平倉。', 'info');
     }
 
-    // 4. 刪除建倉
     function deleteOpenLot(lotId) {
       const lot = state.openLots.find(l => l.id === lotId);
       if (lot && lot.remainingQty !== lot.originalQty) {
-        showToast('此單已有部分平倉，無法直接刪除。請先刪除對應的平倉記錄！', 'error');
-        return;
+        showToast('已有平倉沖銷記錄，無法直接刪除。', 'error'); return;
       }
       state.openLots = state.openLots.filter(l => l.id !== lotId);
       persistData();
       renderAll();
-      showToast('建倉單已刪除。', 'info');
+      showToast('持倉單已刪除。', 'info');
     }
 
-    // 5. 刪除已平倉記錄 (退還原單口數)
     function deleteClosedRecord(recId) {
       const rec = state.closedRecords.find(r => r.id === recId);
       if (!rec) return;
-
-      // 歸還原單口數
-      const matchedIdx = state.openLots.findIndex(
-        l => l.date === rec.openDate && l.direction === rec.direction && l.price === rec.openPrice
-      );
-
-      if (matchedIdx !== -1) {
-        state.openLots[matchedIdx].remainingQty += rec.qty;
+      const idx = state.openLots.findIndex(l => l.date === rec.openDate && l.direction === rec.direction && l.price === rec.openPrice);
+      if (idx !== -1) {
+        state.openLots[idx].remainingQty += rec.qty;
       }
-
       state.closedRecords = state.closedRecords.filter(r => r.id !== recId);
       persistData();
       renderAll();
-      showToast('平倉記錄已刪除，口數已歸還。', 'info');
+      showToast('平倉記錄已刪除，部位已歸還。', 'info');
     }
 
-    // ==========================================
-    // 表單輔助切換功能
-    // ==========================================
     function switchFormAction(action) {
       state.formAction = action;
       const tabOpen = document.getElementById('tab-open');
       const tabClose = document.getElementById('tab-close');
       const formOpen = document.getElementById('form-open');
       const formClose = document.getElementById('form-close');
-
       if (action === 'OPEN') {
         tabOpen.className = "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600/10 border border-emerald-500/50 text-emerald-400";
         tabClose.className = "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-950 text-slate-400 border border-transparent";
@@ -1011,7 +1229,6 @@
         tabOpen.className = "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-950 text-slate-400 border border-transparent";
         formClose.classList.remove('hidden');
         formOpen.classList.add('hidden');
-        // 觸發下拉選單刷新
         populateCloseLotSelector();
       }
     }
@@ -1020,12 +1237,11 @@
       state.openForm.direction = dir;
       const btnLong = document.getElementById('btn-open-long');
       const btnShort = document.getElementById('btn-open-short');
-
       if (dir === 'LONG') {
-        btnLong.className = "py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white shadow-md";
+        btnLong.className = "py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white";
         btnShort.className = "py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850";
       } else {
-        btnShort.className = "py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white shadow-md";
+        btnShort.className = "py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white";
         btnLong.className = "py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850";
       }
     }
@@ -1035,7 +1251,7 @@
       syncContractUI();
       persistData();
       renderAll();
-      showToast(`已切換為：${CONTRACTS[type].name}`, 'info');
+      showToast(`已切換至合約規格：${CONTRACTS[type].name}`, 'info');
     }
 
     function syncContractUI() {
@@ -1058,15 +1274,228 @@
       }
     }
 
+
     // ==========================================
-    // 永久化資料庫系統與備份機制
+    // TAB 2: 對鎖區間計算事件處理 (NEW FEATURE)
+    // ==========================================
+    
+    // 次月價差輸入異動
+    function updateLockingSpread(val) {
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) {
+        state.lockingSpread = parsed;
+        persistData();
+        calculateAdjustedPriceDisplay();
+        renderAll();
+      }
+    }
+
+    // 目前指數異動
+    function updateLockingIndex(val) {
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) {
+        state.lockingIndex = parsed;
+        persistData();
+        renderAll();
+      }
+    }
+
+    // 下拉選單: 一般單 vs 對鎖單 (Requirement 2)
+    function onLockFormTypeChange(val) {
+      state.lockForm.type = val;
+      calculateAdjustedPriceDisplay();
+    }
+
+    // 下拉選單: 新建倉 vs 平倉 (Requirement 2)
+    function onLockFormActionChange(val) {
+      state.lockForm.action = val;
+      const targetGroup = document.getElementById('lock-target-lot-group');
+      const priceLabel = document.getElementById('lbl-lock-price');
+
+      if (val === 'OPEN') {
+        targetGroup.classList.add('hidden');
+        priceLabel.innerText = '建倉成交價 (點)：';
+      } else {
+        targetGroup.classList.remove('hidden');
+        priceLabel.innerText = '平倉價格 (點)：';
+        populateLockCloseSelector();
+      }
+    }
+
+    // 方向選擇: 多單 vs 空單 (Requirement 2)
+    function selectLockDirection(dir) {
+      state.lockForm.direction = dir;
+      const btnLong = document.getElementById('btn-lock-long');
+      const btnShort = document.getElementById('btn-lock-short');
+      if (dir === 'LONG') {
+        btnLong.className = "py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white";
+        btnShort.className = "py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850";
+      } else {
+        btnShort.className = "py-1.5 rounded-lg text-xs font-bold transition bg-rose-600 text-white";
+        btnLong.className = "py-1.5 rounded-lg text-xs font-bold transition bg-slate-950 text-slate-400 border border-slate-850";
+      }
+    }
+
+    // 即時提示折算後的價格 (Requirement 1)
+    function calculateAdjustedPriceDisplay() {
+      const priceVal = parseFloat(document.getElementById('lock-form-price').value);
+      const helper = document.getElementById('adjusted-price-helper');
+      
+      if (isNaN(priceVal) || priceVal <= 0) {
+        helper.innerText = '';
+        return;
+      }
+
+      if (state.lockForm.type === 'LOCK') {
+        const adj = priceVal - state.lockingSpread;
+        helper.innerText = `💡 次月 ${priceVal} 點 ➔ 折算當月: ${adj} 點`;
+      } else {
+        helper.innerText = `當月一般價: ${priceVal} 點`;
+      }
+    }
+
+    // 送出對鎖/一般交易登錄 (Requirement 2)
+    function addLockingLot(e) {
+      e.preventDefault();
+      const date = document.getElementById('lock-form-date').value;
+      const type = state.lockForm.type; // 'NORMAL' or 'LOCK'
+      const action = state.lockForm.action; // 'OPEN' or 'CLOSE'
+      const direction = state.lockForm.direction; // 'LONG' or 'SHORT'
+      const price = parseFloat(document.getElementById('lock-form-price').value);
+      const qty = parseInt(document.getElementById('lock-form-qty').value);
+
+      if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
+        showToast('請填寫正確成交價格與口數！', 'error'); return;
+      }
+
+      if (action === 'OPEN') {
+        // 新建倉 (開新部位)
+        const newLot = {
+          id: `lock-${Date.now()}`,
+          date,
+          orderType: type,
+          direction,
+          price,
+          originalQty: qty,
+          remainingQty: qty
+        };
+        state.lockingLots.unshift(newLot);
+        showToast(`成功建立一筆 ${type === 'LOCK'?'次月對鎖':'當月一般'} ${direction==='LONG'?'多單':'空單'}！`, 'success');
+      } else {
+        // 手動指定平倉
+        const targetId = document.getElementById('lock-close-selector').value;
+        if (!targetId) {
+          showToast('請在下拉選單選擇想要平倉的部位！', 'error'); return;
+        }
+
+        const idx = state.lockingLots.findIndex(l => l.id === targetId);
+        if (idx === -1) return;
+        const targetLot = state.lockingLots[idx];
+
+        if (qty > targetLot.remainingQty) {
+          showToast(`平倉口數超過該筆餘量 (${targetLot.remainingQty}口)！`, 'error'); return;
+        }
+
+        // 扣除持倉口數
+        state.lockingLots[idx].remainingQty -= qty;
+
+        // 計算平倉價格
+        // 原開倉折算後等效成本
+        const openAdjPrice = targetLot.orderType === 'LOCK' ? targetLot.price - state.lockingSpread : targetLot.price;
+        // 此次平倉等效成本
+        const closeAdjPrice = type === 'LOCK' ? price - state.lockingSpread : price;
+
+        // 寫入對鎖已平倉記錄
+        const newClosedRec = {
+          id: `lock-close-${Date.now()}`,
+          openDate: targetLot.date,
+          closeDate: date,
+          direction: targetLot.direction,
+          openPrice: openAdjPrice, // 存入折算後成本便於 PnL 計算
+          closePrice: closeAdjPrice,
+          qty: qty
+        };
+        state.lockingClosed.unshift(newClosedRec);
+        showToast('完成手動對鎖沖銷平倉！', 'success');
+      }
+
+      persistData();
+      
+      // 重設表單數值 (保留時間與類型，重置價格)
+      document.getElementById('lock-form-price').value = '';
+      document.getElementById('lock-form-qty').value = '1';
+      document.getElementById('adjusted-price-helper').innerText = '';
+      
+      // 更新系統時間
+      document.getElementById('lock-form-date').value = getNowDateTimeString();
+
+      renderAll();
+    }
+
+    // ⚡ 快速對鎖平倉按鍵
+    function triggerLockQuickClose(lotId) {
+      const lot = state.lockingLots.find(l => l.id === lotId);
+      if (!lot) return;
+
+      // 切換為平倉表單
+      onLockFormActionChange('CLOSE');
+      document.getElementById('lock-form-action').value = 'CLOSE';
+
+      // 選擇對象並預設帶入價格
+      document.getElementById('lock-close-selector').value = lotId;
+      document.getElementById('lock-form-price').value = state.lockingIndex; // 預設帶目前指數
+      document.getElementById('lock-form-qty').value = "1"; // 預設平 1 口
+
+      // 更新折算輔助
+      calculateAdjustedPriceDisplay();
+      showToast(`已自動選取該筆單，並帶入目前指數為平倉價。`, 'info');
+    }
+
+    function deleteLockOpenLot(lotId) {
+      const lot = state.lockingLots.find(l => l.id === lotId);
+      if (lot && lot.remainingQty !== lot.originalQty) {
+        showToast('該部位已有部分沖銷紀錄，請先刪除已平倉細項。', 'error'); return;
+      }
+      state.lockingLots = state.lockingLots.filter(l => l.id !== lotId);
+      persistData();
+      renderAll();
+      showToast('部位已刪除。', 'info');
+    }
+
+    function deleteLockClosedRecord(recId) {
+      const rec = state.lockingClosed.find(r => r.id === recId);
+      if (!rec) return;
+
+      // 還原口數
+      const idx = state.lockingLots.findIndex(
+        l => l.date === rec.openDate && l.direction === rec.direction
+      );
+      if (idx !== -1) {
+        state.lockingLots[idx].remainingQty += rec.qty;
+      }
+
+      state.lockingClosed = state.lockingClosed.filter(r => r.id !== recId);
+      persistData();
+      renderAll();
+      showToast('平倉記錄已刪除，部位口數已歸還！', 'info');
+    }
+
+    // ==========================================
+    // 本地永久儲存與備份
     // ==========================================
     function persistData() {
+      // Tab 1
       safeSave('futures_open_lots', state.openLots);
       safeSave('futures_closed_records', state.closedRecords);
       try {
         localStorage.setItem('futures_contract_type', state.contractType);
         localStorage.setItem('futures_market_price', state.currentMarketPrice.toString());
+        
+        // Tab 2 (對鎖資料)
+        safeSave('futures_lock_lots', state.lockingLots);
+        safeSave('futures_lock_closed', state.lockingClosed);
+        localStorage.setItem('futures_lock_spread', state.lockingSpread.toString());
+        localStorage.setItem('futures_lock_index', state.lockingIndex.toString());
       } catch (e) {
         console.warn(e);
       }
@@ -1075,13 +1504,16 @@
     function clearAllData() {
       state.openLots = [];
       state.closedRecords = [];
+      state.lockingLots = [];
+      state.lockingClosed = [];
       persistData();
       hideConfirmModal();
       renderAll();
-      showToast('所有部位記錄已完全清空！', 'success');
+      showToast('所有資料已安全清除！', 'success');
     }
 
     function loadDemoData() {
+      // Tab 1 範例
       state.openLots = [
         { id: 'lot-demo-1', date: '2026-06-01 09:05', direction: 'LONG', price: 20000, originalQty: 2, remainingQty: 2 },
         { id: 'lot-demo-2', date: '2026-06-01 10:30', direction: 'LONG', price: 20150, originalQty: 1, remainingQty: 0 },
@@ -1090,37 +1522,51 @@
       state.closedRecords = [
         { id: 'close-demo-1', openDate: '2026-06-01 10:30', closeDate: '2026-06-01 13:10', direction: 'LONG', openPrice: 20150, closePrice: 20100, qty: 1 }
       ];
-      state.contractType = 'MXF';
-      state.currentMarketPrice = 20050;
-      
+
+      // Tab 2 (對鎖範例) (依照您的要求設計)
+      state.lockingSpread = 200;
+      state.lockingIndex = 46500;
+      state.lockingLots = [
+        // 第一筆一般單新建倉多單46000
+        { id: 'lock-demo-l1', date: '2026-07-02 09:30', orderType: 'NORMAL', direction: 'LONG', price: 46000, originalQty: 1, remainingQty: 1 },
+        // 第二筆對鎖單新建倉空單47200 (次月 -> 折算當月等效為 47000)
+        { id: 'lock-demo-l2', date: '2026-07-02 10:15', orderType: 'LOCK', direction: 'SHORT', price: 47200, originalQty: 1, remainingQty: 1 }
+      ];
+      state.lockingClosed = [];
+
       document.getElementById('market-price-input').value = state.currentMarketPrice;
-      syncContractUI();
+      document.getElementById('lock-spread-input').value = state.lockingSpread;
+      document.getElementById('lock-index-input').value = state.lockingIndex;
+
       persistData();
       renderAll();
-      showToast('示範數據載入完成！', 'success');
+      showToast('已為您載入包含「46000多單」與「47200次月空單」的對鎖示範！', 'success');
     }
 
-    // 匯出備份 (JSON) 到手機中
+    // 備份資料
     function exportData() {
       const dataStr = JSON.stringify({
         openLots: state.openLots,
         closedRecords: state.closedRecords,
         contractType: state.contractType,
-        currentMarketPrice: state.currentMarketPrice
+        currentMarketPrice: state.currentMarketPrice,
+        lockingLots: state.lockingLots,
+        lockingClosed: state.lockingClosed,
+        lockingSpread: state.lockingSpread,
+        lockingIndex: state.lockingIndex
       }, null, 2);
       
       const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      const fileName = `futures_lifo_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      const fileName = `futures_lifo_locking_backup_${new Date().toISOString().slice(0, 10)}.json`;
       
       const link = document.createElement('a');
       link.setAttribute('href', dataUri);
       link.setAttribute('download', fileName);
       link.click();
-      
-      showToast('備份檔案已成功下載！', 'success');
+      showToast('備份檔案下載成功！請妥善保存！', 'success');
     }
 
-    // 匯入備份資料
+    // 還原資料
     function importData(e) {
       const reader = new FileReader();
       if (e.target.files && e.target.files[0]) {
@@ -1136,16 +1582,28 @@
                 state.currentMarketPrice = parsed.currentMarketPrice;
                 document.getElementById('market-price-input').value = state.currentMarketPrice;
               }
+
+              // 還原對鎖
+              if (parsed.lockingLots) state.lockingLots = parsed.lockingLots;
+              if (parsed.lockingClosed) state.lockingClosed = parsed.lockingClosed;
+              if (parsed.lockingSpread) {
+                state.lockingSpread = parsed.lockingSpread;
+                document.getElementById('lock-spread-input').value = state.lockingSpread;
+              }
+              if (parsed.lockingIndex) {
+                state.lockingIndex = parsed.lockingIndex;
+                document.getElementById('lock-index-input').value = state.lockingIndex;
+              }
               
               persistData();
               syncContractUI();
               renderAll();
-              showToast('備份資料已成功匯入還原！', 'success');
+              showToast('資料已成功完整還原！', 'success');
             } else {
-              showToast('檔案格式不正確，無法匯入！', 'error');
+              showToast('檔案結構不相容！', 'error');
             }
           } catch {
-            showToast('讀取檔案失敗，請確保是正確的 `.json` 備份檔。', 'error');
+            showToast('檔案解析失敗！', 'error');
           }
         };
       }
