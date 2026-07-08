@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>期貨手動沖銷與對鎖成本計算器 v1.3.0</title>
+  <title>期貨手動沖銷與對鎖成本計算器 v1.4.0</title>
   
   <!-- 載入 Tailwind CSS CDN 用於現代化美觀介面 -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -65,7 +65,7 @@
         <div class="min-w-0">
           <h1 class="text-xs sm:text-sm font-bold tracking-wide text-slate-100 flex items-center gap-1 truncate">
             期貨對鎖與沖銷計算器
-            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0 font-extrabold">v1.3.0</span>
+            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0 font-extrabold">v1.4.0</span>
           </h1>
           <p class="text-[9px] text-slate-400 truncate">支援跨月價差折算 · 離線自主對沖</p>
         </div>
@@ -280,7 +280,7 @@
               </div>
               <div>
                 <label class="text-[11px] text-slate-400 block mb-0.5">🎯 選擇要沖銷的單：</label>
-                <select id="close-lot-selector" onchange="onSelectLotToClose(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200" required>
+                <select id="close-lot-selector" onchange="onSelectLotToClose(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none" required>
                   <option value="">-- 請指定一筆持倉進行平倉 --</option>
                 </select>
                 <span id="close-lot-error" class="hidden text-[9px] text-rose-400 mt-1 block">目前無任何未平倉部位。</span>
@@ -481,13 +481,18 @@
               <!-- 平倉對象選擇（僅平倉時出現） -->
               <div id="lock-target-lot-group" class="hidden">
                 <label class="text-[11px] text-slate-400 block mb-0.5">🎯 選擇要沖銷的持倉：</label>
-                <select id="lock-close-selector" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none">
+                <!-- 修正：這裡幫對鎖平倉下拉選單綁定了 onchange 回調，補齊手動平倉缺口！ -->
+                <select
+                  id="lock-close-selector"
+                  onchange="onSelectLockLotToClose(this.value)"
+                  class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none"
+                >
                   <!-- 動態生成 -->
                 </select>
               </div>
 
               <!-- 欄位3：多單 / 空單方向按鈕 -->
-              <div>
+              <div id="lock-direction-group">
                 <label class="text-[11px] text-slate-400 block mb-1">方向：</label>
                 <div class="grid grid-cols-2 gap-2">
                   <button type="button" onclick="selectLockDirection('LONG')" id="btn-lock-long" class="py-1.5 rounded-lg text-xs font-bold transition bg-emerald-600 text-white">多單 (Long)</button>
@@ -497,17 +502,17 @@
 
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label id="lbl-lock-price" class="text-[11px] text-slate-400 block mb-0.5">成交價/平倉價 (點)：</label>
+                  <label id="lbl-lock-price" class="text-[11px] text-slate-400 block mb-0.5">成交價 (點)：</label>
                   <input type="number" step="any" id="lock-form-price" oninput="calculateAdjustedPriceDisplay()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" placeholder="例如: 46000" required>
                   <span id="adjusted-price-helper" class="text-[9px] text-indigo-400 mt-1 block h-4"></span>
                 </div>
                 <div>
-                  <label class="text-[11px] text-slate-400 block mb-0.5">成交口數 (口)：</label>
+                  <label id="lbl-lock-qty" class="text-[11px] text-slate-400 block mb-0.5">成交口數 (口)：</label>
                   <input type="number" id="lock-form-qty" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none text-slate-200" value="1" required>
                 </div>
               </div>
 
-              <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-lg transition text-white shadow-md">
+              <button type="submit" id="btn-lock-submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-lg transition text-white shadow-md">
                 確認登錄對鎖/一般單
               </button>
             </form>
@@ -570,7 +575,7 @@
   <footer class="bg-slate-900 border-t border-slate-800 text-center py-4 text-[10px] text-slate-500 mt-auto">
     <div class="max-w-7xl mx-auto px-4 space-y-1">
       <p>© 2026 期貨自主沖銷與對鎖計算器 · 數據自動儲存於此裝置</p>
-      <p class="text-indigo-500/80 font-mono text-[9px]">System Version: 1.3.0</p>
+      <p class="text-indigo-500/80 font-mono text-[9px]">System Version: 1.4.0</p>
     </div>
   </footer>
 
@@ -1092,6 +1097,65 @@
       }).join('');
     }
 
+    // 填充對鎖平倉下拉選單
+    function populateLockCloseSelector() {
+      const selector = document.getElementById('lock-close-selector');
+      const activeLots = state.lockingLots.filter(l => l.remainingQty > 0);
+      const btnSubmit = document.getElementById('btn-lock-submit');
+      
+      if (activeLots.length === 0) {
+        selector.innerHTML = '<option value="">-- 目前無未平倉部位 --</option>';
+        if (state.lockForm.action === 'CLOSE') {
+          btnSubmit.disabled = true;
+          btnSubmit.innerText = '🚫 目前無未平倉持倉可平倉';
+          btnSubmit.className = "w-full py-2 bg-slate-800 border border-slate-700 text-xs font-bold rounded-lg text-slate-500 cursor-not-allowed";
+        }
+        return;
+      }
+
+      if (state.lockForm.action === 'CLOSE') {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = '確認手動沖銷對鎖單';
+        btnSubmit.className = "w-full py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold rounded-lg transition text-white shadow-md";
+      }
+
+      const savedSelectedId = selector.value;
+      let optionsHtml = '<option value="">-- 請指定一筆持倉進行平倉 --</option>';
+      activeLots.forEach(lot => {
+        const isLock = lot.orderType === 'LOCK';
+        const typeStr = isLock ? '次月對鎖' : '當月一般';
+        const timeStr = lot.date.split(' ')[1] || lot.date;
+        optionsHtml += `<option value="${lot.id}">[${typeStr} ${timeStr}] ${lot.direction === 'LONG' ? '多' : '空'} @ 原始進場價 ${lot.price} (餘 ${lot.remainingQty} 口)</option>`;
+      });
+
+      selector.innerHTML = optionsHtml;
+      if (savedSelectedId && activeLots.some(l => l.id === savedSelectedId)) {
+        selector.value = savedSelectedId;
+      }
+    }
+
+    // 修正：當在對鎖分頁手動下拉切換平倉部位時，自動在左側同步該部位的資訊！
+    function onSelectLockLotToClose(lotId) {
+      if (!lotId) return;
+      const lot = state.lockingLots.find(l => l.id === lotId);
+      if (lot) {
+        // 1. 同步合約合約類型 (一般/次月對鎖)
+        document.getElementById('lock-form-type').value = lot.orderType;
+        state.lockForm.type = lot.orderType;
+
+        // 2. 預設平倉口數為其目前剩餘的最大口數
+        document.getElementById('lock-form-qty').value = lot.remainingQty;
+
+        // 3. 預設帶入建議估算價格 (若是對鎖，則依據目前指數+價差反推；若是一般，則直接帶入指數)
+        const suggestedPrice = lot.orderType === 'LOCK' 
+          ? state.lockingIndex + state.lockingSpread 
+          : state.lockingIndex;
+        document.getElementById('lock-form-price').value = suggestedPrice;
+
+        calculateAdjustedPriceDisplay();
+      }
+    }
+
     // ==========================================
     // TAB 1: LIFO 記帳事件處理
     // ==========================================
@@ -1154,6 +1218,9 @@
       });
 
       persistData();
+      
+      // 平倉完自動跳回新建倉表單，防止死結
+      switchFormAction('OPEN');
       document.getElementById('close-lot-selector').value = '';
       document.getElementById('close-price').value = '';
       document.getElementById('close-qty').value = '1';
@@ -1289,14 +1356,26 @@
     function onLockFormActionChange(val) {
       state.lockForm.action = val;
       const targetGroup = document.getElementById('lock-target-lot-group');
+      const directionGroup = document.getElementById('lock-direction-group');
       const priceLabel = document.getElementById('lbl-lock-price');
+      const qtyLabel = document.getElementById('lbl-lock-qty');
+      const btnSubmit = document.getElementById('btn-lock-submit');
 
       if (val === 'OPEN') {
         targetGroup.classList.add('hidden');
+        directionGroup.classList.remove('hidden');
         priceLabel.innerText = '建倉成交價 (點)：';
+        qtyLabel.innerText = '建倉數量 (口)：';
+        btnSubmit.innerText = '確認登錄一般/對鎖單';
+        btnSubmit.className = "w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-lg transition text-white shadow-md";
+        btnSubmit.disabled = false;
       } else {
         targetGroup.classList.remove('hidden');
+        directionGroup.classList.add('hidden'); // 平倉時方向由原始進場單鎖定
         priceLabel.innerText = '平倉價格 (點)：';
+        qtyLabel.innerText = '平倉數量 (口)：';
+        btnSubmit.innerText = '確認手動沖銷對鎖單';
+        btnSubmit.className = "w-full py-2 bg-rose-600 hover:bg-rose-500 text-xs font-bold rounded-lg transition text-white shadow-md";
         populateLockCloseSelector();
       }
     }
@@ -1390,6 +1469,11 @@
       }
 
       persistData();
+      
+      // 平倉完成後，重置表單為建倉狀態，防止下拉選取死結
+      onLockFormActionChange('OPEN');
+      document.getElementById('lock-form-action').value = 'OPEN';
+      
       document.getElementById('lock-form-price').value = '';
       document.getElementById('lock-form-qty').value = '1';
       document.getElementById('adjusted-price-helper').innerText = '';
@@ -1405,13 +1489,14 @@
       onLockFormActionChange('CLOSE');
       document.getElementById('lock-form-action').value = 'CLOSE';
 
+      // 1. 設定平倉標的
       document.getElementById('lock-close-selector').value = lotId;
       
-      // 1. 自動把平倉表單的類型，設為與該筆開倉單相同的合約類型
+      // 2. 自動把平倉表單的類型，設為與該筆開倉單相同的合約類型
       document.getElementById('lock-form-type').value = lot.orderType;
       state.lockForm.type = lot.orderType;
 
-      // 2. 如果是次月對鎖，自動帶入次月真實價估算 (指數 + 價差)；當月一般單則直接帶入指數
+      // 3. 如果是次月對鎖，自動帶入次月真實價估算 (目前指數 + 價差)；當月一般單則直接帶入目前指數
       const suggestedPrice = lot.orderType === 'LOCK' 
         ? state.lockingIndex + state.lockingSpread 
         : state.lockingIndex;
