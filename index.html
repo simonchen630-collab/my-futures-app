@@ -333,7 +333,7 @@
 
 
   <!-- ==========================================
-      TAB 2: 價差對鎖區間計算主畫面 (NEW FEATURE)
+      TAB 2: 價差對鎖區間計算主畫面
       ========================================== -->
   <div id="panel-lock" class="flex-1 hidden">
     <main class="max-w-7xl w-full mx-auto p-3 sm:p-5 space-y-4">
@@ -367,7 +367,7 @@
           </div>
         </div>
 
-        <!-- 對鎖區間顯示 (Requirement 3) -->
+        <!-- 對鎖區間顯示 (修正後：多空平均等效成本區間) -->
         <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col justify-center">
           <span class="text-[9px] text-slate-400 font-semibold block">🔒 鎖定區間範圍</span>
           <span id="locking-range-display" class="text-xs sm:text-sm font-extrabold text-amber-400 font-mono mt-0.5">
@@ -379,12 +379,12 @@
         <div class="bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col justify-center text-xs">
           <span class="text-[9px] text-slate-400 font-semibold block">📊 計算合約 (同分頁1)</span>
           <span id="lock-contract-spec" class="text-xs font-bold text-slate-300 font-mono mt-0.5">
-            大台 (TX/200元)
+            小台 (MXF/50元)
           </span>
         </div>
       </div>
 
-      <!-- 對鎖三大損益看板 + 持倉均價看板 (Requirement 3) -->
+      <!-- 對鎖三大損益看板 + 持倉均價看板 -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
         <!-- 多空持倉統計與平均成本 -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg flex flex-col justify-between">
@@ -449,7 +449,7 @@
                 <input type="text" id="lock-form-date" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none">
               </div>
 
-              <!-- 欄位1：一般單 / 對鎖單下拉選項 (Requirement 2) -->
+              <!-- 欄位1：一般單 / 對鎖單下拉選項 -->
               <div class="grid grid-cols-2 gap-2">
                 <div>
                   <label class="text-[11px] text-slate-400 block mb-0.5">單子類型：</label>
@@ -463,7 +463,7 @@
                     <option value="LOCK">對鎖單 (次月折算)</option>
                   </select>
                 </div>
-                <!-- 欄位2：新建倉 / 平倉下拉選項 (Requirement 2) -->
+                <!-- 欄位2：新建倉 / 平倉下拉選項 -->
                 <div>
                   <label class="text-[11px] text-slate-400 block mb-0.5">操作類型：</label>
                   <select
@@ -486,7 +486,7 @@
                 </select>
               </div>
 
-              <!-- 欄位3：多單 / 空單方向按鈕 (Requirement 2) -->
+              <!-- 欄位3：多單 / 空單方向按鈕 -->
               <div>
                 <label class="text-[11px] text-slate-400 block mb-1">方向：</label>
                 <div class="grid grid-cols-2 gap-2">
@@ -584,10 +584,10 @@
     };
 
     // ==========================================
-    // 全域 App 狀態 (納入對鎖資料)
+    // 全域 App 狀態
     // ==========================================
     let state = {
-      activeMainTab: 'LIFO', // 'LIFO' or 'LOCK'
+      activeMainTab: 'LIFO',
       
       // Tab 1: LIFO 資料
       openLots: [],
@@ -598,14 +598,14 @@
       openForm: { direction: 'LONG' },
 
       // Tab 2: 對鎖資料
-      lockingLots: [],        // 對鎖持倉
-      lockingClosed: [],      // 對鎖歷史已平倉
-      lockingSpread: 200,     // 次月價差 (Requirement 1)
-      lockingIndex: 46500,    // 目前指數 (Requirement 1)
+      lockingLots: [],
+      lockingClosed: [],
+      lockingSpread: 200,
+      lockingIndex: 46500,
       lockForm: {
-        type: 'NORMAL',       // 'NORMAL' (一般單) or 'LOCK' (對鎖單)
-        action: 'OPEN',       // 'OPEN' or 'CLOSE'
-        direction: 'LONG'     // 'LONG' or 'SHORT'
+        type: 'NORMAL',
+        action: 'OPEN',
+        direction: 'LONG'
       }
     };
 
@@ -731,7 +731,6 @@
         panelLock.classList.remove('hidden');
         panelLifo.classList.add('hidden');
         
-        // 切換時重設對鎖時間
         document.getElementById('lock-form-date').value = getNowDateTimeString();
         populateLockCloseSelector();
       }
@@ -796,40 +795,38 @@
       populateCloseLotSelector();
 
 
-      // ---- 2. LOCK 對鎖主畫面渲染與計算 (Requirement 3) ----
+      // ---- 2. LOCK 對鎖主畫面渲染與計算 ----
       document.getElementById('lock-contract-spec').innerText = `${CONTRACTS[state.contractType].name} (1點=${pointValue}元)`;
       
-      let lockLongSum = 0, lockLongQty = 0, minLongAdj = Infinity;
-      let lockShortSum = 0, lockShortQty = 0, maxShortAdj = -Infinity;
+      let lockLongSum = 0, lockLongQty = 0;
+      let lockShortSum = 0, lockShortQty = 0;
 
       state.lockingLots.forEach(lot => {
         if (lot.remainingQty > 0) {
-          // 折算等效成本 (Requirement 1)
+          // 折算等效成本
           const adjPrice = lot.orderType === 'LOCK' ? lot.price - state.lockingSpread : lot.price;
           if (lot.direction === 'LONG') {
             lockLongSum += adjPrice * lot.remainingQty;
             lockLongQty += lot.remainingQty;
-            if (adjPrice < minLongAdj) minLongAdj = adjPrice;
           } else {
             lockShortSum += adjPrice * lot.remainingQty;
             lockShortQty += lot.remainingQty;
-            if (adjPrice > maxShortAdj) maxShortAdj = adjPrice;
           }
         }
       });
 
-      // 顯示多空均價看板 (等效折算後均價)
+      // 顯示多空折算後的「平均等效成本」
       const lockLongAvg = lockLongQty > 0 ? Math.round(lockLongSum / lockLongQty) : 0;
       const lockShortAvg = lockShortQty > 0 ? Math.round(lockShortSum / lockShortQty) : 0;
       document.getElementById('lock-long-summary').innerText = lockLongQty > 0 ? `${lockLongAvg.toLocaleString()} 點 (${lockLongQty}口)` : '無部位';
       document.getElementById('lock-short-summary').innerText = lockShortQty > 0 ? `${lockShortAvg.toLocaleString()} 點 (${lockShortQty}口)` : '無部位';
 
-      // 顯示對鎖區間 (最低多單 ~ 最高空單) (Requirement 3)
+      // 顯示真正的對鎖平均成本區間 (多單平均成本 ~ 空單平均成本)
       const rangeEl = document.getElementById('locking-range-display');
       if (lockLongQty > 0 && lockShortQty > 0) {
-        const lowerBound = Math.min(minLongAdj, maxShortAdj);
-        const upperBound = Math.max(minLongAdj, maxShortAdj);
-        rangeEl.innerText = `${lowerBound.toLocaleString()} ~ ${upperBound.toLocaleString()}`;
+        const lowerBound = Math.min(lockLongAvg, lockShortAvg);
+        const upperBound = Math.max(lockLongAvg, lockShortAvg);
+        rangeEl.innerText = `${lowerBound.toLocaleString()} ~ ${upperBound.toLocaleString()} 點`;
       } else {
         rangeEl.innerText = '無對鎖部位';
       }
@@ -843,9 +840,10 @@
         lockUnrealized += diff * lot.remainingQty * pointValue;
       });
 
-      // 已平倉對鎖損益
+      // 已平倉對鎖損益 (修正後：直接以實際成交當期的原始價格直接相減計算，回歸最真實的現金流損益)
       let lockRealized = 0;
       state.lockingClosed.forEach(rec => {
+        // 不管是次月還是當月單，平倉損益都是以當時真實成交的價格直接相減
         const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
         lockRealized += diff * rec.qty * pointValue;
       });
@@ -925,7 +923,7 @@
       document.getElementById('closed-records-badge').innerText = `共 ${state.closedRecords.length} 筆`;
 
       if (state.closedRecords.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">目前尚無平平平結記錄。</p></div>`;
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">目前尚無已平倉記錄。</p></div>`;
         return;
       }
 
@@ -1048,35 +1046,43 @@
       }).join('');
     }
 
+    // 歷史已平倉清單渲染 (修正後：顯示當期真實成交的原始價，並直接計算實現損益)
     function renderLockClosedList(pointValue) {
       const container = document.getElementById('lock-closed-container');
       document.getElementById('lock-closed-badge').innerText = `共 ${state.lockingClosed.length} 筆`;
 
       if (state.lockingClosed.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">無任何對鎖/一般已平平結記錄。</p></div>`;
+        container.innerHTML = `<div class="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950"><p class="text-xs text-slate-500">無任何對鎖/一般已平倉記錄。</p></div>`;
         return;
       }
 
       container.innerHTML = state.lockingClosed.map(rec => {
+        // 已平倉的損益直接使用當期真實成交的原始價 (openPrice 與 closePrice) 相減
         const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
         const pnl = diff * rec.qty * pointValue;
+        const colorClass = pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+
+        // 動態配發合約月份標籤
+        const openBadge = rec.openType === 'LOCK' ? '<span class="text-[8px] bg-amber-950 text-amber-300 px-1 rounded font-bold">次月</span>' : (rec.openType === 'NORMAL' ? '<span class="text-[8px] bg-slate-800 text-slate-300 px-1 rounded font-bold">當月</span>' : '');
+        const closeBadge = rec.closeType === 'LOCK' ? '<span class="text-[8px] bg-amber-950 text-amber-300 px-1 rounded font-bold">次月</span>' : (rec.closeType === 'NORMAL' ? '<span class="text-[8px] bg-slate-800 text-slate-300 px-1 rounded font-bold">當月</span>' : '');
+
         return `
-          <div class="bg-slate-950 border border-slate-850 rounded-lg p-2.5 flex justify-between items-center">
+          <div class="bg-slate-950 border border-slate-850 rounded-lg p-2.5 flex justify-between items-center hover:border-slate-800 transition">
             <div>
               <div class="flex items-center gap-1.5 mb-1">
                 <span class="text-[9px] bg-slate-800 text-slate-400 px-1 rounded font-bold">${rec.direction === 'LONG' ? '多平倉' : '空平倉'}</span>
                 <span class="text-[9px] text-slate-500 font-mono">${rec.closeDate.split(' ')[1] || rec.closeDate} 平</span>
               </div>
-              <div class="text-xs text-slate-300">
-                建倉價 ${rec.openPrice} ➔ 平倉價 ${rec.closePrice} | ${rec.qty} 口
+              <div class="text-xs text-slate-300 flex flex-wrap items-center gap-1">
+                建倉價 ${openBadge} <span class="font-semibold text-slate-100">${rec.openPrice.toLocaleString()}</span> ➔ 
+                平倉價 ${closeBadge} <span class="font-semibold text-slate-100">${rec.closePrice.toLocaleString()}</span> 
+                <span class="text-slate-600">|</span> ${rec.qty} 口
               </div>
             </div>
             <div class="flex items-center gap-3">
               <div class="text-right">
                 <span class="text-[9px] text-slate-500 block">平倉盈虧</span>
-                <span class="text-xs font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
-                  ${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元
-                </span>
+                <span class="text-xs font-bold font-mono ${colorClass}">${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元</span>
               </div>
               <button onclick="deleteLockClosedRecord('${rec.id}')" class="text-rose-400 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
             </div>
@@ -1276,10 +1282,8 @@
 
 
     // ==========================================
-    // TAB 2: 對鎖區間計算事件處理 (NEW FEATURE)
+    // TAB 2: 對鎖計算事件處理
     // ==========================================
-    
-    // 次月價差輸入異動
     function updateLockingSpread(val) {
       const parsed = parseFloat(val);
       if (!isNaN(parsed)) {
@@ -1290,7 +1294,6 @@
       }
     }
 
-    // 目前指數異動
     function updateLockingIndex(val) {
       const parsed = parseFloat(val);
       if (!isNaN(parsed)) {
@@ -1300,13 +1303,12 @@
       }
     }
 
-    // 下拉選單: 一般單 vs 對鎖單 (Requirement 2)
     function onLockFormTypeChange(val) {
       state.lockForm.type = val;
       calculateAdjustedPriceDisplay();
     }
 
-    // 下拉選單: 新建倉 vs 平倉 (Requirement 2)
+    // 操作切換 (新建倉 vs 平倉)
     function onLockFormActionChange(val) {
       state.lockForm.action = val;
       const targetGroup = document.getElementById('lock-target-lot-group');
@@ -1322,7 +1324,6 @@
       }
     }
 
-    // 方向選擇: 多單 vs 空單 (Requirement 2)
     function selectLockDirection(dir) {
       state.lockForm.direction = dir;
       const btnLong = document.getElementById('btn-lock-long');
@@ -1336,7 +1337,6 @@
       }
     }
 
-    // 即時提示折算後的價格 (Requirement 1)
     function calculateAdjustedPriceDisplay() {
       const priceVal = parseFloat(document.getElementById('lock-form-price').value);
       const helper = document.getElementById('adjusted-price-helper');
@@ -1354,7 +1354,7 @@
       }
     }
 
-    // 送出對鎖/一般交易登錄 (Requirement 2)
+    // 登錄對鎖單/一般單
     function addLockingLot(e) {
       e.preventDefault();
       const date = document.getElementById('lock-form-date').value;
@@ -1369,20 +1369,18 @@
       }
 
       if (action === 'OPEN') {
-        // 新建倉 (開新部位)
         const newLot = {
           id: `lock-${Date.now()}`,
           date,
           orderType: type,
           direction,
-          price,
+          price, // 保存原始輸入價 (不論次月或當月)
           originalQty: qty,
           remainingQty: qty
         };
         state.lockingLots.unshift(newLot);
         showToast(`成功建立一筆 ${type === 'LOCK'?'次月對鎖':'當月一般'} ${direction==='LONG'?'多單':'空單'}！`, 'success');
       } else {
-        // 手動指定平倉
         const targetId = document.getElementById('lock-close-selector').value;
         if (!targetId) {
           showToast('請在下拉選單選擇想要平倉的部位！', 'error'); return;
@@ -1396,23 +1394,18 @@
           showToast(`平倉口數超過該筆餘量 (${targetLot.remainingQty}口)！`, 'error'); return;
         }
 
-        // 扣除持倉口數
         state.lockingLots[idx].remainingQty -= qty;
 
-        // 計算平倉價格
-        // 原開倉折算後等效成本
-        const openAdjPrice = targetLot.orderType === 'LOCK' ? targetLot.price - state.lockingSpread : targetLot.price;
-        // 此次平倉等效成本
-        const closeAdjPrice = type === 'LOCK' ? price - state.lockingSpread : price;
-
-        // 寫入對鎖已平倉記錄
+        // 寫入對鎖已平倉記錄 (直接使用交易時的原始價格 openPrice 與 closePrice)
         const newClosedRec = {
           id: `lock-close-${Date.now()}`,
           openDate: targetLot.date,
           closeDate: date,
           direction: targetLot.direction,
-          openPrice: openAdjPrice, // 存入折算後成本便於 PnL 計算
-          closePrice: closeAdjPrice,
+          openPrice: targetLot.price,       // 原始開倉價 (例如：次月 46,200)
+          closePrice: price,                 // 原始平倉價 (例如：次月 46,000)
+          openType: targetLot.orderType,     // 'LOCK' 或 'NORMAL'
+          closeType: type,                   // 'LOCK' 或 'NORMAL'
           qty: qty
         };
         state.lockingClosed.unshift(newClosedRec);
@@ -1420,35 +1413,37 @@
       }
 
       persistData();
-      
-      // 重設表單數值 (保留時間與類型，重置價格)
       document.getElementById('lock-form-price').value = '';
       document.getElementById('lock-form-qty').value = '1';
       document.getElementById('adjusted-price-helper').innerText = '';
-      
-      // 更新系統時間
       document.getElementById('lock-form-date').value = getNowDateTimeString();
-
       renderAll();
     }
 
-    // ⚡ 快速對鎖平倉按鍵
+    // ⚡ 快速對鎖平倉按鍵同步升級
     function triggerLockQuickClose(lotId) {
       const lot = state.lockingLots.find(l => l.id === lotId);
       if (!lot) return;
 
-      // 切換為平倉表單
       onLockFormActionChange('CLOSE');
       document.getElementById('lock-form-action').value = 'CLOSE';
 
-      // 選擇對象並預設帶入價格
       document.getElementById('lock-close-selector').value = lotId;
-      document.getElementById('lock-form-price').value = state.lockingIndex; // 預設帶目前指數
-      document.getElementById('lock-form-qty').value = "1"; // 預設平 1 口
+      
+      // 1. 自動把平倉表單的類型，設為與該筆開倉單相同的合約類型
+      document.getElementById('lock-form-type').value = lot.orderType;
+      state.lockForm.type = lot.orderType;
 
-      // 更新折算輔助
+      // 2. 如果是次月對鎖，自動帶入次月真實價估算 (指數 + 價差)；當月一般單則直接帶入指數
+      const suggestedPrice = lot.orderType === 'LOCK' 
+        ? state.lockingIndex + state.lockingSpread 
+        : state.lockingIndex;
+
+      document.getElementById('lock-form-price').value = suggestedPrice;
+      document.getElementById('lock-form-qty').value = "1";
+
       calculateAdjustedPriceDisplay();
-      showToast(`已自動選取該筆單，並帶入目前指數為平倉價。`, 'info');
+      showToast(`已自動選取該單，並帶入預估市場價。`, 'info');
     }
 
     function deleteLockOpenLot(lotId) {
@@ -1462,14 +1457,20 @@
       showToast('部位已刪除。', 'info');
     }
 
+    // 刪除平平結記錄 (相容舊版 + 新版)
     function deleteLockClosedRecord(recId) {
       const rec = state.lockingClosed.find(r => r.id === recId);
       if (!rec) return;
 
       // 還原口數
-      const idx = state.lockingLots.findIndex(
-        l => l.date === rec.openDate && l.direction === rec.direction
-      );
+      const idx = state.lockingLots.findIndex(l => {
+        // 如果是新紀錄，直接比對實際價格與類型；如果是舊紀錄，則用當月等效價來 fallback 比對
+        const lotPriceMatches = (rec.openType !== undefined)
+          ? (l.price === rec.openPrice && l.orderType === rec.openType)
+          : ((l.orderType === 'LOCK' ? l.price - state.lockingSpread : l.price) === rec.openPrice);
+        return l.date === rec.openDate && l.direction === rec.direction && lotPriceMatches;
+      });
+
       if (idx !== -1) {
         state.lockingLots[idx].remainingQty += rec.qty;
       }
@@ -1484,14 +1485,12 @@
     // 本地永久儲存與備份
     // ==========================================
     function persistData() {
-      // Tab 1
       safeSave('futures_open_lots', state.openLots);
       safeSave('futures_closed_records', state.closedRecords);
       try {
         localStorage.setItem('futures_contract_type', state.contractType);
         localStorage.setItem('futures_market_price', state.currentMarketPrice.toString());
         
-        // Tab 2 (對鎖資料)
         safeSave('futures_lock_lots', state.lockingLots);
         safeSave('futures_lock_closed', state.lockingClosed);
         localStorage.setItem('futures_lock_spread', state.lockingSpread.toString());
@@ -1513,7 +1512,6 @@
     }
 
     function loadDemoData() {
-      // Tab 1 範例
       state.openLots = [
         { id: 'lot-demo-1', date: '2026-06-01 09:05', direction: 'LONG', price: 20000, originalQty: 2, remainingQty: 2 },
         { id: 'lot-demo-2', date: '2026-06-01 10:30', direction: 'LONG', price: 20150, originalQty: 1, remainingQty: 0 },
@@ -1523,13 +1521,10 @@
         { id: 'close-demo-1', openDate: '2026-06-01 10:30', closeDate: '2026-06-01 13:10', direction: 'LONG', openPrice: 20150, closePrice: 20100, qty: 1 }
       ];
 
-      // Tab 2 (對鎖範例) (依照您的要求設計)
       state.lockingSpread = 200;
       state.lockingIndex = 46500;
       state.lockingLots = [
-        // 第一筆一般單新建倉多單46000
         { id: 'lock-demo-l1', date: '2026-07-02 09:30', orderType: 'NORMAL', direction: 'LONG', price: 46000, originalQty: 1, remainingQty: 1 },
-        // 第二筆對鎖單新建倉空單47200 (次月 -> 折算當月等效為 47000)
         { id: 'lock-demo-l2', date: '2026-07-02 10:15', orderType: 'LOCK', direction: 'SHORT', price: 47200, originalQty: 1, remainingQty: 1 }
       ];
       state.lockingClosed = [];
@@ -1583,7 +1578,6 @@
                 document.getElementById('market-price-input').value = state.currentMarketPrice;
               }
 
-              // 還原對鎖
               if (parsed.lockingLots) state.lockingLots = parsed.lockingLots;
               if (parsed.lockingClosed) state.lockingClosed = parsed.lockingClosed;
               if (parsed.lockingSpread) {
