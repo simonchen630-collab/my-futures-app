@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>期貨手動沖銷與對鎖成本計算器</title>
+  <title>期貨手動沖銷與對鎖成本計算器 v1.3.0</title>
   
   <!-- 載入 Tailwind CSS CDN 用於現代化美觀介面 -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -65,7 +65,7 @@
         <div class="min-w-0">
           <h1 class="text-xs sm:text-sm font-bold tracking-wide text-slate-100 flex items-center gap-1 truncate">
             期貨對鎖與沖銷計算器
-            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0">方案A對鎖版</span>
+            <span class="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0 font-extrabold">v1.3.0</span>
           </h1>
           <p class="text-[9px] text-slate-400 truncate">支援跨月價差折算 · 離線自主對沖</p>
         </div>
@@ -568,8 +568,9 @@
   </div>
 
   <footer class="bg-slate-900 border-t border-slate-800 text-center py-4 text-[10px] text-slate-500 mt-auto">
-    <div class="max-w-7xl mx-auto px-4">
+    <div class="max-w-7xl mx-auto px-4 space-y-1">
       <p>© 2026 期貨自主沖銷與對鎖計算器 · 數據自動儲存於此裝置</p>
+      <p class="text-indigo-500/80 font-mono text-[9px]">System Version: 1.3.0</p>
     </div>
   </footer>
 
@@ -840,10 +841,10 @@
         lockUnrealized += diff * lot.remainingQty * pointValue;
       });
 
-      // 已平倉對鎖損益 (修正後：直接以實際成交當期的原始價格直接相減計算，回歸最真實的現金流損益)
+      // 已平倉對鎖損益
       let lockRealized = 0;
       state.lockingClosed.forEach(rec => {
-        // 不管是次月還是當月單，平倉損益都是以當時真實成交的價格直接相減
+        // 直接以當時真實成交的原始價 (openPrice 與 closePrice) 相減，不經價差折損
         const diff = rec.direction === 'LONG' ? rec.closePrice - rec.openPrice : rec.openPrice - rec.closePrice;
         lockRealized += diff * rec.qty * pointValue;
       });
@@ -904,7 +905,7 @@
             <div class="flex items-center gap-2.5">
               <div class="text-right">
                 <span class="text-[9px] text-slate-400 block">當前損益</span>
-                <span class="text-xs font-bold font-mono ${lotPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+                <span class="text-xs font-bold font-mono ${colorClass = lotPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
                   ${lotPnL >= 0 ? '+' : ''}${lotPnL.toLocaleString()}元
                 </span>
               </div>
@@ -942,7 +943,7 @@
             <div class="flex items-center gap-3">
               <div class="text-right">
                 <span class="text-[9px] text-slate-500 block">平倉已實現</span>
-                <span class="text-xs font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元</span>
+                <span class="text-xs font-bold font-mono ${colorClass = pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${pnl >= 0 ? '+' : ''}${pnl.toLocaleString()}元</span>
               </div>
               <button onclick="deleteClosedRecord('${rec.id}')" class="text-rose-400 hover:text-rose-300 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
             </div>
@@ -1089,30 +1090,6 @@
           </div>
         `;
       }).join('');
-    }
-
-    function populateLockCloseSelector() {
-      const selector = document.getElementById('lock-close-selector');
-      const activeLots = state.lockingLots.filter(l => l.remainingQty > 0);
-      
-      if (activeLots.length === 0) {
-        selector.innerHTML = '<option value="">-- 目前無未平倉部位 --</option>';
-        return;
-      }
-
-      const savedSelectedId = selector.value;
-      let optionsHtml = '<option value="">-- 請指定一筆持倉進行平倉 --</option>';
-      activeLots.forEach(lot => {
-        const isLock = lot.orderType === 'LOCK';
-        const typeStr = isLock ? '對鎖單' : '一般單';
-        const timeStr = lot.date.split(' ')[1] || lot.date;
-        optionsHtml += `<option value="${lot.id}">[${typeStr} ${timeStr}] ${lot.direction === 'LONG' ? '多' : '空'} @ 原價${lot.price} (餘 ${lot.remainingQty} 口)</option>`;
-      });
-
-      selector.innerHTML = optionsHtml;
-      if (savedSelectedId && activeLots.some(l => l.id === savedSelectedId)) {
-        selector.value = savedSelectedId;
-      }
     }
 
     // ==========================================
